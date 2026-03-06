@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/api/entities";
+import { isUnauthenticatedError } from "@/api/auth";
 import { isApiConfigured, setAuthToken } from "@/api/client";
 import { toast } from 'sonner';
 
@@ -59,9 +60,12 @@ export default function UploadPage() {
                 }
                 setIsAnonymousUser(false);
             } catch (e) {
-                console.log("User not authenticated. Entering guest/demo mode.");
-                setIsAnonymousUser(true);
-                setIsDemoUser(true);
+                if (isUnauthenticatedError(e)) {
+                    setIsAnonymousUser(true);
+                    setIsDemoUser(true);
+                } else {
+                    console.error('Unexpected auth error on Upload', e);
+                }
             }
         };
         checkUser();

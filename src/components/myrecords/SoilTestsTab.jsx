@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { SoilTest } from "@/api/entities";
 import { Field } from "@/api/entities"; // Import Field entity
 import { User } from "@/api/entities";
+import { isUnauthenticatedError } from "@/api/auth";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,19 +42,15 @@ export default function SoilTestsTab() {
     const location = useLocation();
 
     const loadTests = useCallback(async () => {
-        console.log('LoadTests called, location.state:', location.state);
         setIsLoading(true);
         setLoadError(null);
         
         // Guest User Flow Priority 1: Check session storage for persisted guest data
         const guestData = sessionStorage.getItem('guestSoilTests');
-        console.log('Session storage guestSoilTests:', guestData ? 'exists' : 'not found');
         
         if (guestData) {
-            console.log("Loading data from session storage for guest.");
             try {
                 const parsedData = JSON.parse(guestData);
-                console.log('Parsed session data:', parsedData.length, 'records');
                 setTests(parsedData);
                 setIsAnonymousUser(true);
                 setIsDemo(true);
@@ -67,7 +64,6 @@ export default function SoilTestsTab() {
 
         // Guest User Flow Priority 2: Check for data passed from Upload page.
         if (location.state?.isAnonymousUpload && location.state?.tests) {
-            console.log("Loading data passed from anonymous upload flow.");
             const newTests = location.state.tests;
             setTests(newTests);
             sessionStorage.setItem('guestSoilTests', JSON.stringify(newTests)); // Persist it
@@ -81,7 +77,6 @@ export default function SoilTestsTab() {
 
         // Guest User Flow Priority 3: Check for batch upload results in location state
         if (location.state?.batchUploadResults?.isAnonymousUser && location.state?.batchUploadResults?.allRecords) {
-            console.log("Loading data from batch upload results for anonymous user.");
             const batchRecords = location.state.batchUploadResults.allRecords;
             setTests(batchRecords);
             sessionStorage.setItem('guestSoilTests', JSON.stringify(batchRecords)); // Persist it
@@ -100,27 +95,30 @@ export default function SoilTestsTab() {
             // Authentication Check
             try {
                 currentUser = await User.me();
-                console.log("Authenticated user:", currentUser.email);
                 setUser(currentUser);
                 setIsAnonymousUser(false);
                 if (currentUser.email?.includes('demo')) setIsDemo(true);
             } catch (authError) {
-                console.log("User not authenticated. Entering guest/demo mode.");
-                isAnonymous = true;
-                setIsAnonymousUser(true);
-                setIsDemo(true);
-                setUser(null);
+                if (isUnauthenticatedError(authError)) {
+                    isAnonymous = true;
+                    setIsAnonymousUser(true);
+                    setIsDemo(true);
+                    setUser(null);
+                } else {
+                    console.error('Unexpected auth error on My Records', authError);
+                    isAnonymous = true;
+                    setLoadError(authError?.message || 'Failed to load');
+                    setUser(null);
+                }
             }
             
             // Data Loading Logic
             if (isAnonymous) {
                 // For anonymous users who land here directly, show empty state.
                 // Do NOT attempt to fetch from backend.
-                console.log("Anonymous user on MyRecords page without upload data. Showing empty state.");
                 setTests([]);
             } else {
                 // Authenticated user data loading
-                console.log(`Fetching records for authenticated user: ${currentUser.email}`);
                 const [userTests, userFields] = await Promise.all([
                     SoilTest.filter({ created_by: currentUser.email }, "-updated_date"),
                     Field.list() // Fetch all fields for the user

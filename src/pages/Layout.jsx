@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/api/entities";
+import { isUnauthenticatedError } from "@/api/auth";
 import { 
   LayoutDashboard,
   Upload, 
@@ -54,15 +55,21 @@ export default function Layout({ children, currentPageName }) {
         const currentUser = await User.me();
         setUser(currentUser);
       } catch (error) {
-        console.error("User not authenticated", error);
+        if (isUnauthenticatedError(error)) {
+          setUser(null);
+          // Guest/demo is expected; do not log as error
+        } else {
+          console.error('Unexpected auth error', error);
+          setUser(null);
+        }
       }
     };
     fetchUser();
   }, [location]);
 
-  // Track page views
+  // Track page views (guard in case trackPageView is ever not a function)
   useEffect(() => {
-    if (currentPageName) {
+    if (currentPageName && typeof trackPageView === 'function') {
       trackPageView(currentPageName, {
         is_authenticated: !!user,
         user_type: user?.email?.includes('demo') ? 'demo' : user ? 'authenticated' : 'anonymous'

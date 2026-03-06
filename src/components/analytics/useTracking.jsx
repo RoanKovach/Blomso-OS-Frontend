@@ -143,8 +143,9 @@ export const useTracking = (options = {}) => {
         }
     }, [eventPrefix, batchingEnabled, isTrackingAvailable]); // Removed setIsTrackingAvailable from deps as it's a stable setter
 
-    // Enhanced tracking methods with more context
+    // Enhanced tracking methods with more context (guard so callers never hit "X is not a function")
     const trackPageView = useCallback((pageName, additionalProperties = {}) => {
+        if (typeof track !== 'function') return;
         track('page_view', {
             page: pageName,
             page_title: document.title,
@@ -234,21 +235,22 @@ export const useTracking = (options = {}) => {
         });
     }, [track]);
 
+    const noop = () => {};
     return {
-        track,
-        trackPageView,
-        trackUserAction,
-        trackFileUpload,
-        trackFieldCreation,
-        trackSoilTestAnalysis,
-        trackRecommendationView,
-        trackSearchAction,
-        trackDataExport,
-        trackError,
-        flushEvents,
+        track: typeof track === 'function' ? track : noop,
+        trackPageView: typeof trackPageView === 'function' ? trackPageView : noop,
+        trackUserAction: typeof trackUserAction === 'function' ? trackUserAction : noop,
+        trackFileUpload: typeof trackFileUpload === 'function' ? trackFileUpload : noop,
+        trackFieldCreation: typeof trackFieldCreation === 'function' ? trackFieldCreation : noop,
+        trackSoilTestAnalysis: typeof trackSoilTestAnalysis === 'function' ? trackSoilTestAnalysis : noop,
+        trackRecommendationView: typeof trackRecommendationView === 'function' ? trackRecommendationView : noop,
+        trackSearchAction: typeof trackSearchAction === 'function' ? trackSearchAction : noop,
+        trackDataExport: typeof trackDataExport === 'function' ? trackDataExport : noop,
+        trackError: typeof trackError === 'function' ? trackError : noop,
+        flushEvents: typeof flushEvents === 'function' ? flushEvents : noop,
         pendingEventsCount: pendingEvents.length,
         isOnline,
-        isTrackingAvailable // Return the new state
+        isTrackingAvailable
     };
 };
 

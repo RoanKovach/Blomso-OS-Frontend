@@ -5,6 +5,19 @@
 
 import { apiGet, apiPost, apiPut, isApiConfigured } from './client.js';
 
+/** True when the error indicates unauthenticated/guest (expected), not a real failure. */
+export function isUnauthenticatedError(error) {
+  if (!error) return false;
+  const msg = error?.message ?? '';
+  const status = error?.status;
+  return (
+    status === 401 ||
+    status === 403 ||
+    msg === 'User not authenticated' ||
+    (typeof msg === 'string' && msg.includes('User not authenticated'))
+  );
+}
+
 export const User = {
   async me() {
     if (!isApiConfigured()) {

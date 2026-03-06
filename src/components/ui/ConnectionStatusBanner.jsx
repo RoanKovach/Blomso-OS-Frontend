@@ -63,11 +63,11 @@ export const ConnectionStatusBanner = () => {
           </span>
         </div>
         
-        {isOnline && hasPendingMutations && !isSyncing && (
+        {isOnline && hasPendingMutations && !isSyncing && typeof syncPendingMutations === 'function' && (
           <Button
             variant="outline"
             size="sm"
-            onClick={syncPendingMutations}
+            onClick={() => syncPendingMutations()}
             className={`${content.textColor} border-current hover:bg-current hover:bg-opacity-10`}
           >
             Sync Now

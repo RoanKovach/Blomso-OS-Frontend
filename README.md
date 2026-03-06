@@ -30,6 +30,18 @@ npm run build
 
 Output is in `dist/`. Deploy `dist/` to S3 + CloudFront or use Amplify Hosting. Set `VITE_API_URL` and `VITE_MAPBOX_TOKEN` in your build environment so they are baked into the build.
 
+### AWS Amplify SPA routing
+
+Direct URLs (e.g. `/upload`, `/my-records`) must serve `index.html` so the React router can handle them. In the Amplify Console: **Hosting** > **Rewrites and redirects** > **Manage redirects**. Add a rewrite with source `/<*>`, target `/index.html`, type **200 (Rewrite)**. You can copy the rule from `amplify-spa-rewrite.json` in this repo.
+
+### Post-deploy validation
+
+After deploying, verify:
+
+1. **Routing** – Open `/upload` and `/my-records` directly (hard refresh). Both should load the app, not 404.
+2. **Guest mode** – With no auth token, open the app and navigate. Console should not show repeated "User not authenticated" stack traces.
+3. **Runtime** – No `TypeError: j is not a function` (or similar) in the console when moving between Dashboard, Upload, and My Records.
+
 ## Lint
 
 ```bash
