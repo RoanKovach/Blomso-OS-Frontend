@@ -1,6 +1,56 @@
-import { base44 } from '@/api/base44Client';
+import { apiPost } from '@/api/client';
+import { UploadFile, InvokeLLM } from '@/api/integrations';
+import { SoilTest } from '@/api/entities';
 import { buildSafeExtractionSchema, buildExtractionPrompt } from '../utils/vertexAISchemaBuilder';
 import { format } from 'date-fns';
+
+/**
+ * Backend upload spine only: init -> PUT to S3 -> complete.
+ * No parsing. Used when authenticated and VITE_API_URL is set.
+ */
+export async function* uploadFileToBackend(file) {
+  const filename = file.name || 'document.pdf';
+  const contentType = file.type || 'application/pdf';
+
+  yield { status: 'processing', progress: 20, currentStep: 'Requesting upload URL...' };
+
+  const initRes = await apiPost('/functions/upload/init', { filename, contentType });
+  if (!initRes?.uploadUrl || !initRes?.uploadId || !initRes?.key) {
+    throw new Error(initRes?.error || 'Upload init failed');
+  }
+
+  yield { status: 'processing', progress: 50, currentStep: 'Uploading file to storage...' };
+
+  const putRes = await fetch(initRes.uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': contentType },
+  });
+  if (!putRes.ok) {
+    throw new Error(`Upload failed: ${putRes.status} ${putRes.statusText}`);
+  }
+
+  yield { status: 'processing', progress: 80, currentStep: 'Finalizing upload...' };
+
+  const completeRes = await apiPost('/functions/upload/complete', {
+    uploadId: initRes.uploadId,
+    key: initRes.key,
+    filename,
+    contentType,
+  });
+
+  yield {
+    status: 'complete',
+    progress: 100,
+    currentStep: 'Upload complete!',
+    result: {
+      count: 1,
+      uploadId: completeRes?.id ?? initRes.uploadId,
+      status: completeRes?.status ?? 'created',
+      key: initRes.key,
+    },
+  };
+}
 
 /**
  * Service for handling file uploads and soil test extraction
@@ -23,7 +73,7 @@ export class UploadService {
         currentStep: 'Uploading file to server...'
       };
 
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await UploadFile({ file });
 
       // Step 2: Extract data using AI (30% progress)
       yield {
@@ -35,7 +85,7 @@ export class UploadService {
       const extractionPrompt = buildExtractionPrompt(contextData);
       const responseSchema = buildSafeExtractionSchema();
 
-      const extractionResponse = await base44.integrations.Core.InvokeLLM({
+      const extractionResponse = await InvokeLLM({
         prompt: extractionPrompt,
         response_json_schema: responseSchema,
         file_urls: [file_url],
@@ -138,7 +188,7 @@ export class UploadService {
       });
 
       // Use bulk create to save all records at once
-      const createdRecords = await base44.entities.SoilTest.bulkCreate(recordsToCreate);
+      const createdRecords = await SoilTest.bulkCreate(recordsToCreate);
 
       // Step 6: Complete (100% progress)
       yield {

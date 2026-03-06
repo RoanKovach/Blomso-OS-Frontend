@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { trackEvent as apiTrackEvent } from '@/api/functions';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
 
 const OFFLINE_EVENTS_KEY = 'blomso_offline_analytics';
@@ -80,7 +80,7 @@ export const useTracking = (options = {}) => {
                 }
 
                 try {
-                    await base44.functions.invoke('trackEvent', eventData); // Changed to base44 client
+                    await apiTrackEvent(eventData);
                 } catch (error) {
                     const errorMessage = error?.message || error?.detail || '';
                     if (errorMessage.includes('subscription tier') || errorMessage.includes('blocked') || errorMessage.includes('Functions are blocked')) {
@@ -127,7 +127,7 @@ export const useTracking = (options = {}) => {
             setPendingEvents(prev => [...prev, eventData]);
         } else {
             try {
-                await base44.functions.invoke('trackEvent', eventData); // Changed to base44 client
+                await apiTrackEvent(eventData);
             } catch (error) {
                 // Check if it's a subscription tier or blocking error
                 const errorMessage = error?.message || error?.detail || '';

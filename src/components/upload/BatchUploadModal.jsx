@@ -22,7 +22,9 @@ import { toast } from "sonner";
 import ContextualForm from "./ContextualForm";
 import { buildSafeExtractionSchema, buildExtractionPrompt } from "../utils/vertexAISchemaBuilder";
 import { format, parse, isValid } from 'date-fns';
-import { base44 } from '@/api/base44Client'; // Updated import for pre-initialized base44 client
+import { User, SoilTest } from '@/api/entities';
+import { UploadFile } from '@/api/integrations';
+import { invoke } from '@/api/functions';
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 const MAX_FILES = 20; // Reasonable limit for batch processing
@@ -77,7 +79,7 @@ export default function BatchUploadModal({ isOpen, onClose, onComplete }) {
 
   const checkUserStatus = async () => {
     try {
-      await base44.entities.User.me(); // Updated to use base44 client
+      await User.me();
       setIsAnonymousUser(false);
     } catch (error) {
       console.log('User not authenticated - treating as anonymous');
@@ -183,7 +185,7 @@ export default function BatchUploadModal({ isOpen, onClose, onComplete }) {
           }));
 
           // Step 1: Upload file
-          const { file_url } = await base44.integrations.Core.UploadFile({ file }); // Updated to use base44 client
+          const { file_url } = await UploadFile({ file });
 
           // Step 2: Extract data using simplified schema
           const extractionPrompt = buildExtractionPrompt(metadata);
@@ -191,7 +193,7 @@ export default function BatchUploadModal({ isOpen, onClose, onComplete }) {
 
           console.log("Batch processing with schema (gpt-4o):", JSON.stringify(responseSchema, null, 2));
 
-          const { data: extractionResponse } = await base44.functions.invoke('extractSoilTests', { // Updated to use base44 client
+          const { data: extractionResponse } = await invoke('extractSoilTests', {
             file_url,
             prompt: extractionPrompt,
             response_json_schema: responseSchema,
@@ -278,7 +280,7 @@ export default function BatchUploadModal({ isOpen, onClose, onComplete }) {
                     return dataToSave;
                 });
                 
-                savedRecords = await base44.entities.SoilTest.bulkCreate(recordsToCreate);
+                savedRecords = await SoilTest.bulkCreate(recordsToCreate);
 
             } catch (saveError) {
                 throw new Error(`Save failed: ${saveError.message}`);

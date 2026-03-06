@@ -44,7 +44,7 @@ const HeroSection = () => {
         <div className="space-y-6">
           <div className="flex items-center gap-4">
             <img 
-              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/80d6d38e6_BlomsoLogoBlack1500.png" 
+              src="/logo.svg" 
               alt="Blomso Logo" 
               className="h-12 w-auto"
               onError={(e) => {
@@ -100,7 +100,7 @@ const HeroSection = () => {
         <div className="flex justify-center lg:justify-end">
           <div className="relative w-full max-w-md lg:max-w-lg">
             <img 
-              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/8dcefffe2_PortalImage2.png" 
+              src="/logo.svg" 
               alt="Smart Farming Technology Illustration" 
               className="w-full h-auto rounded-lg shadow-lg object-cover"
               style={{ aspectRatio: '4/3' }}

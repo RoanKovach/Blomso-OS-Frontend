@@ -8,10 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Loader2, BrainCircuit, Send, Sparkles, Calculator, Wrench, FileText, Paperclip, X, ChevronDown, ChevronUp, DollarSign, Calendar, Zap, FileCheck, TrendingUp, MapPin, Plus } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
-import { SoilTest } from '@/api/entities';
-import { Practice } from '@/api/entities';
-import { User } from '@/api/entities';
+import { SoilTest, Practice, User } from '@/api/entities';
+import { InvokeLLM } from '@/api/integrations';
 import ToolCallLog from './ToolCallLog';
 import TillyThinkingLoader from "./TillyThinkingLoader";
 
@@ -273,7 +271,7 @@ Generate a professional agronomy report with: Executive Summary, Data Validation
 Keep the response under 900 words.`;
 
             // Use the built-in InvokeLLM integration
-            const contentText = await base44.integrations.Core.InvokeLLM({
+            const contentText = await InvokeLLM({
                 prompt: fullPrompt,
                 add_context_from_internet: false
             });

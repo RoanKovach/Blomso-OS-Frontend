@@ -2,7 +2,7 @@ import { InvokeLLM } from "@/api/integrations";
 
 /**
  * Service for fetching and processing analytics data
- * Note: This assumes analytics data is available through the Base44 platform
+ * Note: This assumes analytics data is available through the backend API
  * In a real implementation, you might need to integrate with PostHog API or similar
  */
 export class AnalyticsService {

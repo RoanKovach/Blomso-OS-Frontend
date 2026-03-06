@@ -1,83 +1,63 @@
-import { base44 } from './base44Client';
+/**
+ * Backend function invocations via REST.
+ * POST /functions/<name> with body. When API is not configured, throws.
+ */
 
+import { apiPost, isApiConfigured } from './client.js';
 
-export const tilly = base44.functions.tilly;
+export async function invoke(functionName, payload = {}) {
+  if (!isApiConfigured()) {
+    throw new Error(`API not configured. Cannot invoke ${functionName}. Set VITE_API_URL.`);
+  }
+  const result = await apiPost(`/functions/${functionName}`, payload);
+  // Backend may return { data: { output: ... } }; preserve shape for callers
+  return result;
+}
 
-export const exportSoilTests = base44.functions.exportSoilTests;
+function fn(name) {
+  return (payload = {}) => invoke(name, payload);
+}
 
-export const geeFetchS2 = base44.functions.geeFetchS2;
-
-export const naipFetch = base44.functions.naipFetch;
-
-export const maskAndNdvi = base44.functions.maskAndNdvi;
-
-export const soilAndStats = base44.functions.soilAndStats;
-
-export const openEtFetch = base44.functions.openEtFetch;
-
-export const zoneAggregation = base44.functions.zoneAggregation;
-
-export const getFields = base44.functions.getFields;
-
-export const queryTilly = base44.functions.queryTilly;
-
-export const getNdviImagery = base44.functions.getNdviImagery;
-
-export const claimOhioFields = base44.functions.claimOhioFields;
-
-export const autoFieldDataUpdate = base44.functions.autoFieldDataUpdate;
-
-export const getUserFields = base44.functions.getUserFields;
-
-export const getOhioBoundaries = base44.functions.getOhioBoundaries;
-
-export const getFieldDetailsOnClick = base44.functions.getFieldDetailsOnClick;
-
-export const manageField = base44.functions.manageField;
-
-export const getOhioParcels = base44.functions.getOhioParcels;
-
-export const getParcelDetails = base44.functions.getParcelDetails;
-
-export const manageParcelField = base44.functions.manageParcelField;
-
-export const cleanupDemoData = base44.functions.cleanupDemoData;
-
-export const processAndSaveSoilTests = base44.functions.processAndSaveSoilTests;
-
-export const soilTestModels = base44.functions.soilTestModels;
-
-export const testSoilTestModels = base44.functions.testSoilTestModels;
-
-export const zipProcessor = base44.functions.zipProcessor;
-
-export const trackEvent = base44.functions.trackEvent;
-
-export const checkDataSourceStatus = base44.functions.checkDataSourceStatus;
-
-export const processShapefile = base44.functions.processShapefile;
-
-export const suggestSoilTestLinks = base44.functions.suggestSoilTestLinks;
-
-export const linkSoilTestsToField = base44.functions.linkSoilTestsToField;
-
-export const getSsurgoData = base44.functions.getSsurgoData;
-
-export const pkPhase = base44.functions.pkPhase;
-
-export const pRate = base44.functions.pRate;
-
-export const kRate = base44.functions.kRate;
-
-export const mrtnCorn = base44.functions.mrtnCorn;
-
-export const wheatN = base44.functions.wheatN;
-
-export const limeRate = base44.functions.limeRate;
-
-export const triStateAdvisor = base44.functions.triStateAdvisor;
-
-export const invokeGPT = base44.functions.invokeGPT;
-
-export const extractSoilTests = base44.functions.extractSoilTests;
-
+export const tilly = fn('tilly');
+export const exportSoilTests = fn('exportSoilTests');
+export const geeFetchS2 = fn('geeFetchS2');
+export const naipFetch = fn('naipFetch');
+export const maskAndNdvi = fn('maskAndNdvi');
+export const soilAndStats = fn('soilAndStats');
+export const openEtFetch = fn('openEtFetch');
+export const zoneAggregation = fn('zoneAggregation');
+export const getFields = fn('getFields');
+export const queryTilly = fn('queryTilly');
+export const getNdviImagery = fn('getNdviImagery');
+export const claimOhioFields = fn('claimOhioFields');
+export const autoFieldDataUpdate = fn('autoFieldDataUpdate');
+export const getUserFields = fn('getUserFields');
+export const getOhioBoundaries = fn('getOhioBoundaries');
+export const getFieldDetailsOnClick = fn('getFieldDetailsOnClick');
+export const manageField = fn('manageField');
+export const getOhioParcels = fn('getOhioParcels');
+export const getParcelDetails = fn('getParcelDetails');
+export const manageParcelField = fn('manageParcelField');
+export const cleanupDemoData = fn('cleanupDemoData');
+export const processAndSaveSoilTests = fn('processAndSaveSoilTests');
+export const soilTestModels = fn('soilTestModels');
+export const testSoilTestModels = fn('testSoilTestModels');
+export const zipProcessor = fn('zipProcessor');
+export async function trackEvent(payload = {}) {
+  if (!isApiConfigured()) return;
+  return invoke('trackEvent', payload);
+}
+export const checkDataSourceStatus = fn('checkDataSourceStatus');
+export const processShapefile = fn('processShapefile');
+export const suggestSoilTestLinks = fn('suggestSoilTestLinks');
+export const linkSoilTestsToField = fn('linkSoilTestsToField');
+export const getSsurgoData = fn('getSsurgoData');
+export const pkPhase = fn('pkPhase');
+export const pRate = fn('pRate');
+export const kRate = fn('kRate');
+export const mrtnCorn = fn('mrtnCorn');
+export const wheatN = fn('wheatN');
+export const limeRate = fn('limeRate');
+export const triStateAdvisor = fn('triStateAdvisor');
+export const invokeGPT = fn('invokeGPT');
+export const extractSoilTests = fn('extractSoilTests');

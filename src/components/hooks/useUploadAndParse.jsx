@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef } from 'react';
-import { UploadService } from '../services/uploadService';
+import { UploadService, uploadFileToBackend } from '../services/uploadService';
+import { isApiConfigured } from '@/api/client';
 import { toast } from 'sonner';
 
 /**
  * Custom hook for handling file upload and soil test extraction
- * Provides progress tracking and error handling
+ * When authenticated and API configured, uses backend upload spine only (init -> S3 PUT -> complete).
+ * Otherwise uses full parse flow (when available).
  */
 export const useUploadAndParse = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -28,7 +30,18 @@ export const useUploadAndParse = () => {
   }, []);
 
   const startProcessing = useCallback(async (file, contextData, isDemoUser = false) => {
-    if (!file || !contextData) {
+    if (!file) {
+      const errorMsg = 'File is required';
+      setError(errorMsg);
+      toast.error(errorMsg);
+      return;
+    }
+
+    const useBackendUploadOnly = !isDemoUser && isApiConfigured();
+    if (useBackendUploadOnly && !contextData) {
+      contextData = { field_name: file.name || 'Upload' };
+    }
+    if (!useBackendUploadOnly && !contextData) {
       const errorMsg = 'File and context data are required';
       setError(errorMsg);
       toast.error(errorMsg);
@@ -39,8 +52,11 @@ export const useUploadAndParse = () => {
     setIsProcessing(true);
     
     try {
-      // Use the async generator from UploadService
-      for await (const update of UploadService.processFile(file, contextData, isDemoUser)) {
+      const generator = useBackendUploadOnly
+        ? uploadFileToBackend(file)
+        : UploadService.processFile(file, contextData, isDemoUser);
+
+      for await (const update of generator) {
         if (!isMountedRef.current) break;
 
         setProgress(update.progress);
@@ -48,11 +64,14 @@ export const useUploadAndParse = () => {
 
         if (update.status === 'complete') {
           setResult(update.result);
-          setExtractedTests(update.result.tests);
+          setExtractedTests(update.result?.tests ?? []);
           
-          const successMsg = isDemoUser 
-            ? `Successfully processed ${update.result.count} demo record(s)!`
-            : `Successfully processed ${update.result.count} soil test record(s)!`;
+          const count = update.result?.count ?? 1;
+          const successMsg = useBackendUploadOnly
+            ? `File uploaded successfully. Record saved (parsing not yet available).`
+            : isDemoUser
+              ? `Successfully processed ${count} demo record(s)!`
+              : `Successfully processed ${count} soil test record(s)!`;
           toast.success(successMsg);
         } else if (update.status === 'failed') {
           throw new Error(update.error);

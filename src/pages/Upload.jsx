@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/api/entities";
+import { isApiConfigured, setAuthToken } from "@/api/client";
 import { toast } from 'sonner';
 
 // Updated imports using new service layer
@@ -27,6 +28,7 @@ export default function UploadPage() {
     const [isDemoUser, setIsDemoUser] = useState(false);
     const [showBatchUpload, setShowBatchUpload] = useState(false);
     const [isAnonymousUser, setIsAnonymousUser] = useState(false);
+    const [tokenInput, setTokenInput] = useState('');
 
     const { trackFileUpload } = useTracking();
 
@@ -261,6 +263,30 @@ export default function UploadPage() {
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>{error || uploadError}</AlertDescription>
                     </Alert>
+                )}
+
+                {/* Temporary: set Cognito IdToken for testing when backend is configured. Production uses Hosted UI login. */}
+                {isApiConfigured() && (
+                    <Card className="mb-6 border-dashed border-green-300 bg-green-50/50">
+                        <CardContent className="pt-4 pb-4">
+                            <p className="text-sm text-green-900 mb-2">Backend configured. For testing: paste Cognito IdToken and click Set token.</p>
+                            <div className="flex gap-2 flex-wrap">
+                                <input
+                                    type="password"
+                                    placeholder="IdToken (JWT)"
+                                    value={tokenInput}
+                                    onChange={(e) => setTokenInput(e.target.value)}
+                                    className="flex-1 min-w-[200px] rounded border border-green-200 px-3 py-2 text-sm"
+                                />
+                                <Button type="button" variant="secondary" size="sm" onClick={() => { setAuthToken(tokenInput); setTokenInput(''); toast.success('Token set'); }}>
+                                    Set token
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => { setAuthToken(''); toast.info('Token cleared'); }}>
+                                    Clear token
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 )}
 
                 {/* Step 1: File Upload */}

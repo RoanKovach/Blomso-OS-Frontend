@@ -78,7 +78,7 @@ export default function Layout({ children, currentPageName }) {
             <SidebarHeader>
               <Link to={createPageUrl("Dashboard")} className="flex items-center justify-center p-4">
                 <img 
-                  src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/80d6d38e6_BlomsoLogoBlack1500.png" 
+                  src="/logo.svg" 
                   alt="Blomso Logo" 
                   className="h-10 w-auto" 
                 />
