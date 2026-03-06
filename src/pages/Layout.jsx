@@ -124,11 +124,11 @@ export default function Layout({ children, currentPageName }) {
                   >
                     <Avatar>
                       <AvatarImage src={user?.avatar_url} />
-                      <AvatarFallback>{user?.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                      <AvatarFallback>{(user?.full_name || user?.username || user?.email || 'U').charAt(0).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm truncate">{user?.full_name || "User"}</p>
-                      <p className="text-xs text-gray-500 truncate">{user?.email || "user@email.com"}</p>
+                      <p className="font-semibold text-gray-800 text-sm truncate">{user?.full_name || user?.username || "User"}</p>
+                      <p className="text-xs text-gray-500 truncate">{user?.email || user?.username || "user@email.com"}</p>
                     </div>
                   </Link>
                   <Button variant="ghost" size="sm" onClick={() => User.logout()} className="mt-2 w-full justify-start">
