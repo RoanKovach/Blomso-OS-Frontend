@@ -7,7 +7,7 @@ const DEFAULT_RETURN = '/Dashboard';
 
 /**
  * OAuth callback for Cognito Hosted UI. Parses id_token from URL fragment,
- * stores it, and redirects to Dashboard (or returnTo from state).
+ * stores it, then does a full-page redirect so Layout mounts with token and fetches user.
  */
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -29,8 +29,7 @@ export default function AuthCallback() {
     if (idToken) {
       setAuthToken(idToken);
       const returnTo = new URLSearchParams(window.location.search).get('returnTo') || DEFAULT_RETURN;
-      window.history.replaceState({}, document.title, returnTo);
-      navigate(returnTo, { replace: true });
+      window.location.replace(window.location.origin + returnTo);
       return;
     }
 
