@@ -31,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import 'leaflet/dist/leaflet.css'; // Globally import Leaflet CSS to fix map rendering
 import { useTracking } from '@/components/analytics/useTracking';
 import AppErrorBoundary from '@/components/error/AppErrorBoundary';
@@ -136,20 +137,27 @@ export default function Layout({ children, currentPageName }) {
                     Sign Out
                   </Button>
                 </>
-              ) : isHostedUiConfigured() ? (
-                <Button variant="default" size="sm" onClick={() => User.login()} className="w-full justify-center">
-                  <UserIcon className="w-4 h-4 mr-2" />
-                  Sign in
-                </Button>
               ) : (
-                <div className="flex items-center gap-3 p-2">
-                  <Avatar>
-                    <AvatarFallback>U</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm truncate">Guest</p>
-                    <p className="text-xs text-gray-500 truncate">Sign in to save data</p>
-                  </div>
+                /* Not logged in: always show Sign in button so users can start Hosted UI flow */
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      if (isHostedUiConfigured()) {
+                        User.login();
+                      } else {
+                        toast.info("Sign-in is not configured for this environment.", {
+                          description: "Set VITE_APP_URL, VITE_COGNITO_DOMAIN, and VITE_COGNITO_CLIENT_ID in the build to enable sign-in.",
+                        });
+                      }
+                    }}
+                    className="w-full justify-center"
+                  >
+                    <UserIcon className="w-4 h-4 mr-2" />
+                    Sign in
+                  </Button>
+                  <p className="text-xs text-gray-500 text-center">Sign in to save data</p>
                 </div>
               )}
             </SidebarFooter>
