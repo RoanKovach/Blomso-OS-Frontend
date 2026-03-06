@@ -1,23 +1,14 @@
 import Layout from "./Layout.jsx";
-
 import Dashboard from "./Dashboard";
-
 import Upload from "./Upload";
-
 import Recommendations from "./Recommendations";
-
 import SoilAnalysisReport from "./SoilAnalysisReport";
-
 import MyRecords from "./MyRecords";
-
 import DataPipeline from "./DataPipeline";
-
 import Profile from "./Profile";
-
 import FieldVisualization from "./FieldVisualization";
-
 import Analytics from "./Analytics";
-
+import AuthCallback from "./AuthCallback.jsx";
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
@@ -93,7 +84,10 @@ function PagesContent() {
 export default function Pages() {
     return (
         <Router>
-            <PagesContent />
+            <Routes>
+                <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="*" element={<PagesContent />} />
+            </Routes>
         </Router>
     );
 }

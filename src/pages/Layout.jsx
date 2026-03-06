@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/api/entities";
-import { isUnauthenticatedError } from "@/api/auth";
+import { isUnauthenticatedError, isHostedUiConfigured } from "@/api/auth";
 import { 
   LayoutDashboard,
   Upload, 
@@ -116,23 +116,42 @@ export default function Layout({ children, currentPageName }) {
             </SidebarContent>
 
             <SidebarFooter className="border-t border-gray-200 p-4">
-              <Link 
-                to={createPageUrl("Profile")} 
-                className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-              >
-                <Avatar>
-                  <AvatarImage src={user?.avatar_url} />
-                  <AvatarFallback>{user?.full_name?.charAt(0) || 'U'}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 text-sm truncate">{user?.full_name || "User"}</p>
-                  <p className="text-xs text-gray-500 truncate">{user?.email || "user@email.com"}</p>
+              {user ? (
+                <>
+                  <Link 
+                    to={createPageUrl("Profile")} 
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                  >
+                    <Avatar>
+                      <AvatarImage src={user?.avatar_url} />
+                      <AvatarFallback>{user?.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-800 text-sm truncate">{user?.full_name || "User"}</p>
+                      <p className="text-xs text-gray-500 truncate">{user?.email || "user@email.com"}</p>
+                    </div>
+                  </Link>
+                  <Button variant="ghost" size="sm" onClick={() => User.logout()} className="mt-2 w-full justify-start">
+                    <LogOut className="w-4 h-4 mr-2 text-gray-500"/>
+                    Sign Out
+                  </Button>
+                </>
+              ) : isHostedUiConfigured() ? (
+                <Button variant="default" size="sm" onClick={() => User.login()} className="w-full justify-center">
+                  <UserIcon className="w-4 h-4 mr-2" />
+                  Sign in
+                </Button>
+              ) : (
+                <div className="flex items-center gap-3 p-2">
+                  <Avatar>
+                    <AvatarFallback>U</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800 text-sm truncate">Guest</p>
+                    <p className="text-xs text-gray-500 truncate">Sign in to save data</p>
+                  </div>
                 </div>
-              </Link>
-              <Button variant="ghost" size="sm" onClick={() => User.logout()} className="mt-2 w-full justify-start">
-                <LogOut className="w-4 h-4 mr-2 text-gray-500"/>
-                Sign Out
-              </Button>
+              )}
             </SidebarFooter>
           </Sidebar>
 
