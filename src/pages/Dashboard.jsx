@@ -44,7 +44,7 @@ const HeroSection = () => {
         <div className="space-y-6">
           <div className="flex items-center gap-4">
             <img 
-              src="/logo.svg" 
+              src="/logo-icon.png" 
               alt="Blomso Logo" 
               className="h-12 w-auto"
               onError={(e) => {
@@ -100,7 +100,7 @@ const HeroSection = () => {
         <div className="flex justify-center lg:justify-end">
           <div className="relative w-full max-w-md lg:max-w-lg">
             <img 
-              src="/logo.svg" 
+              src="/logo-icon.png" 
               alt="Smart Farming Technology Illustration" 
               className="w-full h-auto rounded-lg shadow-lg object-cover"
               style={{ aspectRatio: '4/3' }}

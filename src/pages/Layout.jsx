@@ -86,7 +86,7 @@ export default function Layout({ children, currentPageName }) {
             <SidebarHeader>
               <Link to={createPageUrl("Dashboard")} className="flex items-center justify-center p-4">
                 <img 
-                  src="/logo.svg" 
+                  src="/logo-icon.png" 
                   alt="Blomso Logo" 
                   className="h-10 w-auto" 
                 />
