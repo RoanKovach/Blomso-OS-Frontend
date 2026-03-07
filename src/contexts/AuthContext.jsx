@@ -26,10 +26,30 @@ export function AuthProvider({ children }) {
     fetchUser();
   }, [location]);
 
+  const refreshAuth = React.useCallback(async () => {
+    try {
+      const currentUser = await User.me();
+      setUser(currentUser);
+    } catch (error) {
+      if (isUnauthenticatedError(error)) {
+        setUser(null);
+      } else {
+        console.error('Unexpected auth error', error);
+        setUser(null);
+      }
+    }
+  }, []);
+
+  const clearAuth = React.useCallback(() => {
+    setUser(null);
+  }, []);
+
   const value = {
     user,
     isDemoMode: user === null,
     isFullMode: user !== null,
+    refreshAuth,
+    clearAuth,
   };
 
   return (

@@ -8,6 +8,7 @@ import { createPageUrl } from "@/utils";
 import { User } from "@/api/entities";
 import { isUnauthenticatedError } from "@/api/auth";
 import { isApiConfigured, setAuthToken } from "@/api/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from 'sonner';
 
 // Updated imports using new service layer
@@ -21,6 +22,7 @@ import { useTracking } from '@/components/analytics/useTracking';
 
 export default function UploadPage() {
     const navigate = useNavigate();
+    const { refreshAuth, clearAuth } = useAuth();
     const [file, setFile] = useState(null);
     const [dragActive, setDragActive] = useState(false);
     const [error, setError] = useState(null);
@@ -282,10 +284,10 @@ export default function UploadPage() {
                                     onChange={(e) => setTokenInput(e.target.value)}
                                     className="flex-1 min-w-[200px] rounded border border-green-200 px-3 py-2 text-sm"
                                 />
-                                <Button type="button" variant="secondary" size="sm" onClick={() => { setAuthToken(tokenInput); setTokenInput(''); toast.success('Token set'); }}>
+                                <Button type="button" variant="secondary" size="sm" onClick={() => { setAuthToken(tokenInput); setTokenInput(''); refreshAuth(); toast.success('Token set'); }}>
                                     Set token
                                 </Button>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => { setAuthToken(''); toast.info('Token cleared'); }}>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => { setAuthToken(''); clearAuth(); toast.info('Token cleared'); }}>
                                     Clear token
                                 </Button>
                             </div>
