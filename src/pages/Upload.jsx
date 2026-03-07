@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, ArrowLeft, Upload as UploadIcon, FileArchive } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/api/entities";
 import { isUnauthenticatedError } from "@/api/auth";
@@ -19,6 +19,7 @@ import BatchUploadModal from "../components/upload/BatchUploadModal";
 import AsyncUploadFlow from "../components/upload/AsyncUploadFlow";
 import { useUploadAndParse } from "../components/hooks/useUploadAndParse";
 import { useTracking } from '@/components/analytics/useTracking';
+import { saveNormalizedRecords } from "@/api/records";
 
 export default function UploadPage() {
     const navigate = useNavigate();
@@ -31,6 +32,8 @@ export default function UploadPage() {
     const [isDemoUser, setIsDemoUser] = useState(false);
     const [showBatchUpload, setShowBatchUpload] = useState(false);
     const [isAnonymousUser, setIsAnonymousUser] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState(null);
     const [tokenInput, setTokenInput] = useState('');
 
     const { trackFileUpload } = useTracking();
@@ -43,14 +46,20 @@ export default function UploadPage() {
         result,
         error: uploadError,
         extractedTests,
+        setExtractedTests,
         startProcessing,
         retryProcessing,
+        loadExtractionForReview,
         resetState,
         cleanup,
         isComplete,
         hasError,
         canRetry
     } = useUploadAndParse();
+
+    /** When in backend-path review, the upload record id for extraction/save. Set when entering step 4 from upload complete or from My Records. */
+    const [backendReviewUploadId, setBackendReviewUploadId] = useState(null);
+    const [isLoadingExtraction, setIsLoadingExtraction] = useState(false);
 
     // Check user status on mount
     useEffect(() => {
@@ -75,6 +84,29 @@ export default function UploadPage() {
         // Cleanup on unmount
         return cleanup;
     }, [cleanup]);
+
+    // Open backend-path review from My Records (e.g. "Review" on an upload record)
+    const location = useLocation();
+    useEffect(() => {
+        const uploadId = location.state?.backendReviewUploadId;
+        const filename = location.state?.backendReviewFilename || '';
+        if (!uploadId || isAnonymousUser) return;
+        let cancelled = false;
+        setBackendReviewUploadId(uploadId);
+        setCurrentStep(4);
+        setIsLoadingExtraction(true);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        loadExtractionForReview(uploadId, { field_name: filename || 'Upload' }, filename)
+            .then(({ success, count }) => {
+                if (cancelled) return;
+                setIsLoadingExtraction(false);
+                if (!success || count === 0) {
+                    setExtractedTests([]);
+                }
+            })
+            .catch(() => setIsLoadingExtraction(false));
+        return () => { cancelled = true; };
+    }, [location.state?.backendReviewUploadId, location.state?.backendReviewFilename, isAnonymousUser, loadExtractionForReview]);
 
     // Handle drag and drop
     const handleDrag = useCallback((e) => {
@@ -126,13 +158,57 @@ export default function UploadPage() {
         }
     };
 
-    const handleContinueToReview = () => {
-        setCurrentStep(4);
+    const handleContinueToReview = async () => {
+        const uploadId = result?.uploadId;
+        if (uploadId) {
+            if (isLoadingExtraction) return;
+            setIsLoadingExtraction(true);
+            try {
+                const { success, count } = await loadExtractionForReview(uploadId, contextualData || {}, file?.name || '');
+                if (success && count > 0) {
+                    setBackendReviewUploadId(uploadId);
+                    setCurrentStep(4);
+                } else {
+                    toast.info('No extraction data yet. You can review from My Records when ready.');
+                }
+            } finally {
+                setIsLoadingExtraction(false);
+            }
+        } else {
+            setCurrentStep(4);
+        }
     };
 
     const handleFinalizeAndAnalyze = async (finalizedTests) => {
-        // This is handled by the service layer now
-        // Navigate to results
+        const fullMode = !isAnonymousUser && isApiConfigured();
+        const uploadId = backendReviewUploadId || result?.uploadId;
+
+        if (fullMode && uploadId && Array.isArray(finalizedTests) && finalizedTests.length > 0) {
+            setIsSaving(true);
+            setSaveError(null);
+            try {
+                const res = await saveNormalizedRecords(uploadId, finalizedTests);
+                const count = res?.count ?? res?.saved?.length ?? finalizedTests.length;
+                toast.success(`Successfully saved ${count} soil test record(s)!`);
+                navigate(createPageUrl("MyRecords"), {
+                    state: {
+                        refreshData: true,
+                        successMessage: `Successfully saved ${count} soil test record(s)!`
+                    }
+                });
+                setBackendReviewUploadId(null);
+            } catch (err) {
+                console.error("Save normalized records failed:", err);
+                const message = err?.message || (err?.response ? `Save failed: ${err.response.status}` : "Failed to save records.");
+                setSaveError(message);
+                toast.error(message);
+            } finally {
+                setIsSaving(false);
+            }
+            return;
+        }
+
+        // Demo or missing uploadId: navigate with in-memory state (no backend save)
         setTimeout(() => {
             if (isAnonymousUser) {
                 navigate(createPageUrl("MyRecords"), {
@@ -146,7 +222,7 @@ export default function UploadPage() {
                 navigate(createPageUrl("MyRecords"), {
                     state: {
                         refreshData: true,
-                        successMessage: `Successfully saved ${result?.count || 0} soil test record(s)!`
+                        successMessage: `Successfully saved ${result?.count || finalizedTests?.length || 0} soil test record(s)!`
                     }
                 });
             }
@@ -353,19 +429,44 @@ export default function UploadPage() {
                     />
                 )}
 
-                {/* Step 4: Review Extracted Data */}
-                {currentStep === 4 && extractedTests.length > 0 && (
-                    <MultiTestReview
-                        tests={extractedTests}
-                        onUpdateTest={(updatedTest) => {
-                            // Handle test updates if needed
-                        }}
-                        onResetTest={(testId) => {
-                            // Handle test reset if needed
-                        }}
-                        onFinalize={handleFinalizeAndAnalyze}
-                        onCancel={resetUpload}
-                    />
+                {/* Step 4: Review Extracted Data (backend path or demo path) */}
+                {currentStep === 4 && (
+                    <>
+                        {isLoadingExtraction ? (
+                            <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
+                                <CardContent className="py-12 text-center">
+                                    <p className="text-green-700">Loading extraction data…</p>
+                                </CardContent>
+                            </Card>
+                        ) : extractedTests.length > 0 ? (
+                            <>
+                                {saveError && (
+                                    <Alert variant="destructive" className="mb-4">
+                                        <AlertDescription>{saveError}</AlertDescription>
+                                    </Alert>
+                                )}
+                                <MultiTestReview
+                                    tests={extractedTests}
+                                    onUpdateTest={(updatedTest) => {
+                                        setExtractedTests(prev => prev.map(t => t.tempId === updatedTest.tempId ? updatedTest : t));
+                                    }}
+                                    onResetTest={() => {}}
+                                    onFinalize={handleFinalizeAndAnalyze}
+                                    onCancel={() => { setBackendReviewUploadId(null); resetUpload(); }}
+                                    isSaving={isSaving}
+                                />
+                            </>
+                        ) : (
+                            <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
+                                <CardContent className="py-12 text-center space-y-4">
+                                    <p className="text-gray-600">No extraction data available for this upload yet.</p>
+                                    <Button variant="outline" onClick={() => navigate(createPageUrl("MyRecords"))}>
+                                        Back to My Records
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </>
                 )}
             </div>
 

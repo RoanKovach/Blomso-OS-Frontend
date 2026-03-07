@@ -100,29 +100,36 @@ export default function Layout({ children, currentPageName }) {
               </SidebarGroup>
             </SidebarContent>
 
-            <SidebarFooter className="border-t border-gray-200 p-4">
+            <SidebarFooter className="border-t border-gray-200 px-3 py-3">
               {user ? (() => {
                 const { primary, secondary, initial } = getUserDisplayIdentity(user);
                 return (
-                <>
-                  <Link 
-                    to={createPageUrl("Profile")} 
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                  >
-                    <Avatar>
-                      <AvatarImage src={user?.avatar_url} />
-                      <AvatarFallback>{initial}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm truncate">{primary}</p>
-                      <p className="text-xs text-gray-500 truncate">{secondary}</p>
-                    </div>
-                  </Link>
-                  <Button variant="ghost" size="sm" onClick={() => User.logout()} className="mt-2 w-full justify-start">
-                    <LogOut className="w-4 h-4 mr-2 text-gray-500"/>
-                    Sign Out
-                  </Button>
-                </>
+                  <div className="flex flex-col gap-1">
+                    <Link
+                      to={createPageUrl("Profile")}
+                      className="flex items-center gap-3 rounded-lg p-2 hover:bg-sidebar-accent transition-colors min-w-0"
+                    >
+                      <Avatar className="h-9 w-9 shrink-0">
+                        <AvatarImage src={user?.avatar_url} />
+                        <AvatarFallback className="text-xs bg-sidebar-accent text-sidebar-accent-foreground">
+                          {initial}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-sidebar-foreground truncate">{primary}</p>
+                        <p className="text-xs text-muted-foreground truncate">{secondary}</p>
+                      </div>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => User.logout()}
+                      className="h-8 w-full justify-start text-muted-foreground hover:text-sidebar-foreground"
+                    >
+                      <LogOut className="w-3.5 h-3.5 mr-2 shrink-0" />
+                      Sign out
+                    </Button>
+                  </div>
                 );
               })() : (
                 /* Not logged in: always show Sign in button so users can start Hosted UI flow */

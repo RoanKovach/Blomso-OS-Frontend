@@ -1,7 +1,7 @@
 /**
- * Derive display strings for the signed-in user card from /me response.
- * Priority: email > username (if not UUID) > full_name/name > truncated sub.
- * Never show raw Cognito sub as the main label.
+ * Derive display strings for the signed-in user card from GET /me response.
+ * Priority: email → username (if not UUID/sub) → name (full_name/name) → shortened sub as last resort.
+ * Never show raw Cognito sub as the primary label; only shortened sub when nothing else is available.
  */
 
 function looksLikeUUID(s) {
@@ -23,13 +23,15 @@ export function getUserDisplayIdentity(user) {
     return { primary: 'User', secondary: 'Signed in', initial: 'U' };
   }
 
-  const email = user.email || null;
-  const username = user.username && !looksLikeUUID(user.username) ? user.username : null;
-  const name = user.full_name || user.name || null;
+  const email = (user.email && typeof user.email === 'string') ? user.email.trim() : null;
+  const rawUsername = (user.username && typeof user.username === 'string') ? user.username.trim() : null;
+  const username = rawUsername && !looksLikeUUID(rawUsername) && rawUsername !== user.sub ? rawUsername : null;
+  const name = (user.full_name || user.name) && typeof (user.full_name || user.name) === 'string'
+    ? (user.full_name || user.name).trim() : null;
   const subDisplay = user.sub ? truncateSub(user.sub) : null;
 
   const primary = email || username || name || subDisplay || 'User';
-  const secondary = primary === email ? 'Signed in' : (email || 'Signed in');
+  const secondary = 'Signed in';
   const initial = (primary && primary !== 'User' ? primary.charAt(0) : 'U').toUpperCase();
 
   return { primary, secondary, initial };

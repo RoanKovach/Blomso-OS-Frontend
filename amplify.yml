@@ -1,6 +1,7 @@
 # AWS Amplify build spec for Blomso-OS-Frontend (Vite + React SPA).
-# SPA routing: In Amplify Console go to Hosting > Rewrites and redirects,
-# add a 200 rewrite: source /<*>, target /index.html (or use amplify-spa-rewrite.json).
+# SPA routing: Direct routes (e.g. /Dashboard, /auth/callback) must serve index.html.
+# See docs/HOSTING.md. Add rewrite in Console if needed: source /<*>, target /index.html (200).
+# Rule set in repo: amplify-spa-rewrite.json.
 version: 1
 frontend:
   phases:

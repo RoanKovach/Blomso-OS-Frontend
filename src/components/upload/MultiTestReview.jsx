@@ -30,7 +30,7 @@ const EditableField = ({ id, label, value, onChange, error, isBlank, type = "num
     </div>
 );
 
-export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFinalize, onCancel, apiErrors = {} }) {
+export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFinalize, onCancel, apiErrors = {}, isSaving = false }) {
     const [validationErrors, setValidationErrors] = useState({});
     
     // All soil data fields that should be displayed
@@ -297,16 +297,16 @@ export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFi
                         </Button>
                         <Button
                             onClick={handleFinalize}
-                            disabled={hasValidationErrors}
+                            disabled={hasValidationErrors || isSaving}
                             className={`flex items-center gap-2 ${
-                                hasValidationErrors
+                                hasValidationErrors || isSaving
                                     ? 'bg-gray-400 cursor-not-allowed'
                                     : 'bg-green-600 hover:bg-green-700'
                             }`}
-                            title={hasValidationErrors ? "Please fix validation errors first" : "Save all records"}
+                            title={hasValidationErrors ? "Please fix validation errors first" : isSaving ? "Saving…" : "Save all records"}
                         >
                             <Brain className="w-4 h-4" />
-                            Save All Records
+                            {isSaving ? "Saving…" : "Save All Records"}
                         </Button>
                     </div>
                 </CardFooter>

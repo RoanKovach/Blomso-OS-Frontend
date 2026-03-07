@@ -4,6 +4,7 @@ import { SoilTest } from "@/api/entities";
 import { Field } from "@/api/entities"; // Import Field entity
 import { User } from "@/api/entities";
 import { isUnauthenticatedError } from "@/api/auth";
+import { listRecords } from "@/api/records";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ export default function SoilTestsTab() {
     const [expandedRows, setExpandedRows] = useState(new Set());
     const [loadError, setLoadError] = useState(null);
     const [isAnonymousUser, setIsAnonymousUser] = useState(false);
+    /** True when signed-in and data came from GET /records (upload placeholders), not from /soil-tests */
+    const [backendRecordsMode, setBackendRecordsMode] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -54,6 +57,7 @@ export default function SoilTestsTab() {
                 setTests(parsedData);
                 setIsAnonymousUser(true);
                 setIsDemo(true);
+                setBackendRecordsMode(false);
             } catch (e) {
                 console.error("Failed to parse guest data from session storage:", e);
                 sessionStorage.removeItem('guestSoilTests'); // Clear corrupted data
@@ -69,6 +73,7 @@ export default function SoilTestsTab() {
             sessionStorage.setItem('guestSoilTests', JSON.stringify(newTests)); // Persist it
             setIsAnonymousUser(true);
             setIsDemo(true);
+            setBackendRecordsMode(false);
             setIsLoading(false);
             // Clear the state to prevent re-loading on refresh
             window.history.replaceState({}, document.title);
@@ -82,6 +87,7 @@ export default function SoilTestsTab() {
             sessionStorage.setItem('guestSoilTests', JSON.stringify(batchRecords)); // Persist it
             setIsAnonymousUser(true);
             setIsDemo(true);
+            setBackendRecordsMode(false);
             setIsLoading(false);
             // Clear the state to prevent re-loading on refresh
             window.history.replaceState({}, document.title);
@@ -117,17 +123,28 @@ export default function SoilTestsTab() {
                 // For anonymous users who land here directly, show empty state.
                 // Do NOT attempt to fetch from backend.
                 setTests([]);
+                setBackendRecordsMode(false);
             } else {
-                // Authenticated user data loading
-                const [userTests, userFields] = await Promise.all([
-                    SoilTest.filter({ created_by: currentUser.email }, "-updated_date"),
-                    Field.list() // Fetch all fields for the user
-                ]);
-                setTests(userTests || []);
-                
-                // Create the field map for easy lookup
-                const map = new Map(userFields.map(f => [f.id, f.field_name]));
-                setFieldsMap(map);
+                // Authenticated user: GET /records (uploads + normalized_soil_test). Show only normalized as soil tests.
+                const { records } = await listRecords();
+                const normalized = (records || []).filter((r) => r.type === 'normalized_soil_test');
+                const displayTests = normalized.map((r) => ({
+                    id: r.id,
+                    field_name: r.field_name ?? r.zone_name ?? 'Unnamed',
+                    zone_name: r.zone_name,
+                    test_date: r.test_date,
+                    soil_data: r.soil_data ?? {},
+                    crop_type: r.crop_type,
+                    soil_type: r.soil_type,
+                    field_id: r.field_id,
+                    soil_health_index: r.soil_health_index,
+                    updated_date: r.updatedAt ?? r.createdAt,
+                    createdAt: r.createdAt,
+                    sourceUploadId: r.sourceUploadId,
+                }));
+                setTests(displayTests);
+                setBackendRecordsMode(true);
+                setFieldsMap(new Map());
             }
         } catch (error) {
             console.error("Error in loadTests:", error);
@@ -377,63 +394,111 @@ export default function SoilTestsTab() {
             
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex items-center gap-4">
-                    <h3 className="text-lg font-semibold text-green-900">Soil Test Records</h3>
-                    
-                    <Tabs value={viewMode} onValueChange={setViewMode} className="w-auto">
-                        <TabsList>
-                            <TabsTrigger value="list" className="flex items-center gap-2">
-                                <List className="w-4 h-4" />
-                                List
-                            </TabsTrigger>
-                            <TabsTrigger 
-                                value="grid" 
-                                className="flex items-center gap-2"
-                            >
-                                <Grid3X3 className="w-4 h-4" />
-                                Grid
-                            </TabsTrigger>
-                        </TabsList>
-                    </Tabs>
+                    <h3 className="text-lg font-semibold text-green-900">
+                        {backendRecordsMode ? "Upload Records" : "Soil Test Records"}
+                    </h3>
+                    {!backendRecordsMode && (
+                        <Tabs value={viewMode} onValueChange={setViewMode} className="w-auto">
+                            <TabsList>
+                                <TabsTrigger value="list" className="flex items-center gap-2">
+                                    <List className="w-4 h-4" />
+                                    List
+                                </TabsTrigger>
+                                <TabsTrigger 
+                                    value="grid" 
+                                    className="flex items-center gap-2"
+                                >
+                                    <Grid3X3 className="w-4 h-4" />
+                                    Grid
+                                </TabsTrigger>
+                            </TabsList>
+                        </Tabs>
+                    )}
                 </div>
-                
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button 
-                                onClick={handleExport} 
-                                disabled={isExporting}
-                                variant="default"
-                            >
-                                <Download className="w-4 h-4 mr-2" />
-                                {isExporting ? "Exporting..." : "Export CSV"}
-                            </Button>
-                        </TooltipTrigger>
-                         {isDemo && (
-                            <TooltipContent>
-                                <p>Exporting as CSV is a premium feature.</p>
-                            </TooltipContent>
-                        )}
-                    </Tooltip>
-                </TooltipProvider>
+                {!backendRecordsMode && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button 
+                                    onClick={handleExport} 
+                                    disabled={isExporting}
+                                    variant="default"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    {isExporting ? "Exporting..." : "Export CSV"}
+                                </Button>
+                            </TooltipTrigger>
+                             {isDemo && (
+                                <TooltipContent>
+                                    <p>Exporting as CSV is a premium feature.</p>
+                                </TooltipContent>
+                            )}
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
             </div>
 
             {tests.length === 0 ? (
                 <Card className="text-center p-8">
                     <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                    <h3 className="text-lg font-semibold text-gray-800">No Soil Tests Found</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                        {backendRecordsMode ? "No Uploads Yet" : "No Soil Tests Found"}
+                    </h3>
                     <p className="text-gray-600">
                         {isAnonymousUser ? 
                             "No demo records found. Upload a soil test to get started!" :
-                            "You haven't uploaded any soil tests yet."
+                            backendRecordsMode
+                                ? "Upload a PDF to see your files here. Extraction and review are coming soon."
+                                : "You haven't uploaded any soil tests yet."
                         }
                     </p>
                     <Button 
                         onClick={() => navigate(createPageUrl("Upload"))} 
                         className="mt-4 bg-green-600 hover:bg-green-700"
                     >
-                        Upload Your First Test
+                        {backendRecordsMode ? "Upload a File" : "Upload Your First Test"}
                     </Button>
                 </Card>
+            ) : backendRecordsMode ? (
+                /* Backend upload records: filename, createdAt, status, contentType */
+                <div className="overflow-x-auto border rounded-lg bg-white">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Filename</TableHead>
+                                <TableHead>Created</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {tests.map((rec) => (
+                                <TableRow key={rec.id} className="hover:bg-green-50/50">
+                                    <TableCell className="font-medium">{rec.filename || '—'}</TableCell>
+                                    <TableCell>{rec.createdAt ? formatLastUpdated(rec.createdAt) : '—'}</TableCell>
+                                    <TableCell><Badge variant="secondary">{rec.status || 'uploaded'}</Badge></TableCell>
+                                    <TableCell className="text-gray-500 text-sm">{rec.contentType || '—'}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => navigate(createPageUrl("Upload"), {
+                                                state: {
+                                                    backendReviewUploadId: rec.id,
+                                                    backendReviewFilename: rec.filename || ''
+                                                }
+                                            })}
+                                        >
+                                            <Eye className="w-4 h-4 mr-1" />
+                                            Review
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
             ) : (
                 <Tabs value={viewMode} onValueChange={setViewMode}>
                     <TabsContent value="list">

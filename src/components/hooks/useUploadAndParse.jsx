@@ -1,12 +1,31 @@
 import { useState, useCallback, useRef } from 'react';
 import { UploadService, uploadFileToBackend } from '../services/uploadService';
 import { isApiConfigured } from '@/api/client';
+import { getExtraction } from '@/api/extraction';
 import { toast } from 'sonner';
+
+/**
+ * Maps extraction artifact (D1) candidates to review format expected by MultiTestReview.
+ * Adds field_name, tempId, and ensures soil_data/lab_info exist.
+ */
+function mapExtractionToReviewCandidates(soil_tests, contextData = {}, uploadId = '', filename = '') {
+  const fieldName = contextData?.field_name || filename || 'Upload';
+  return (soil_tests || []).map((test, index) => ({
+    ...test,
+    field_name: fieldName,
+    zone_name: test.zone_name || `${fieldName} - Zone ${index + 1}`,
+    soil_data: test.soil_data || {},
+    lab_info: test.lab_info || {},
+    tempId: `backend_${uploadId}_${index}`,
+    source_file_name: filename || undefined,
+  }));
+}
 
 /**
  * Custom hook for handling file upload and soil test extraction
  * When authenticated and API configured, uses backend upload spine only (init -> S3 PUT -> complete).
  * Otherwise uses full parse flow (when available).
+ * Backend path: after upload complete, use loadExtractionForReview(uploadId, contextData) to load extraction and show review.
  */
 export const useUploadAndParse = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -96,6 +115,37 @@ export const useUploadAndParse = () => {
     startProcessing(file, contextData, isDemoUser);
   }, [startProcessing]);
 
+  /**
+   * Load extraction for an upload (backend path) and set extractedTests for review UI.
+   * Call after backend upload complete or when opening review from My Records.
+   * @param {string} uploadId - Record id from upload complete or GET /records
+   * @param {Object} contextData - At least field_name; optional field_size_acres, crop_type, etc.
+   * @param {string} filename - Optional display filename for source_file_name
+   * @returns {Promise<{ success: boolean, count: number }>}
+   */
+  const loadExtractionForReview = useCallback(async (uploadId, contextData = {}, filename = '') => {
+    if (!uploadId) return { success: false, count: 0 };
+    try {
+      const artifact = await getExtraction(uploadId);
+      const candidates = mapExtractionToReviewCandidates(
+        artifact.soil_tests || [],
+        contextData,
+        uploadId,
+        filename
+      );
+      if (!isMountedRef.current) return { success: false, count: 0 };
+      setExtractedTests(candidates);
+      setError(null);
+      return { success: true, count: candidates.length };
+    } catch (err) {
+      if (!isMountedRef.current) return { success: false, count: 0 };
+      console.error('loadExtractionForReview error', err);
+      setError(err.message || 'Failed to load extraction');
+      setExtractedTests([]);
+      return { success: false, count: 0 };
+    }
+  }, []);
+
   const cleanup = useCallback(() => {
     isMountedRef.current = false;
   }, []);
@@ -107,8 +157,10 @@ export const useUploadAndParse = () => {
     result,
     error,
     extractedTests,
+    setExtractedTests,
     startProcessing,
     retryProcessing,
+    loadExtractionForReview,
     resetState,
     cleanup,
     isComplete: !isProcessing && result !== null,
