@@ -1,1 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none"><rect width="200" height="48" fill="#1a1a1a" rx="4"/><text x="24" y="32" font-family="system-ui,sans-serif" font-size="24" font-weight="bold" fill="white">Blomso</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
+  <!-- Blomso: three overlapping leaves (bud/flower), dark green center, light green sides -->
+  <g transform="translate(4, 2) scale(1.1)">
+    <!-- Left leaf - light green -->
+    <path d="M8 22 Q4 14 8 6 Q14 10 16 18 Q14 24 8 22" fill="#7cb342"/>
+    <!-- Right leaf - light green -->
+    <path d="M32 22 Q38 14 32 6 Q26 10 24 18 Q26 24 32 22" fill="#7cb342"/>
+    <!-- Center leaf - dark green (on top) -->
+    <path d="M20 4 Q24 12 20 24 Q16 28 12 22 Q14 12 20 4" fill="#2e5d3a"/>
+  </g>
+  <text x="50" y="34" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700" fill="#374151" letter-spacing="0.03em">BLOMSO</text>
+</svg>

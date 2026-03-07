@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="#1a1a1a" rx="4"/><text x="16" y="22" font-family="system-ui,sans-serif" font-size="18" font-weight="bold" fill="white" text-anchor="middle">B</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <path d="M6.4 17.6Q2.4 11.2 6.4 4.8Q11.2 8 12.8 14.4Q11.2 19.2 6.4 17.6z" fill="#7cb342"/>
+  <path d="M25.6 17.6Q29.6 11.2 25.6 4.8Q20.8 8 19.2 14.4Q20.8 19.2 25.6 17.6z" fill="#7cb342"/>
+  <path d="M16 3.2Q19.2 9.6 16 19.2Q12.8 22.4 9.6 17.6Q11.2 9.6 16 3.2z" fill="#2e5d3a"/>
+</svg>
