@@ -1,10 +1,12 @@
 
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { getUserDisplayIdentity } from "@/utils/displayIdentity";
 import { User } from "@/api/entities";
-import { isUnauthenticatedError, isHostedUiConfigured } from "@/api/auth";
+import { isHostedUiConfigured } from "@/api/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   LayoutDashboard,
   Upload, 
@@ -46,27 +48,9 @@ const navigationItems = [
 ];
 
 export default function Layout({ children, currentPageName }) {
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
   const location = useLocation();
   const { trackPageView } = useTracking();
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const currentUser = await User.me();
-        setUser(currentUser);
-      } catch (error) {
-        if (isUnauthenticatedError(error)) {
-          setUser(null);
-          // Guest/demo is expected; do not log as error
-        } else {
-          console.error('Unexpected auth error', error);
-          setUser(null);
-        }
-      }
-    };
-    fetchUser();
-  }, [location]);
 
   // Track page views (guard in case trackPageView is ever not a function)
   useEffect(() => {
@@ -117,7 +101,9 @@ export default function Layout({ children, currentPageName }) {
             </SidebarContent>
 
             <SidebarFooter className="border-t border-gray-200 p-4">
-              {user ? (
+              {user ? (() => {
+                const { primary, secondary, initial } = getUserDisplayIdentity(user);
+                return (
                 <>
                   <Link 
                     to={createPageUrl("Profile")} 
@@ -125,11 +111,11 @@ export default function Layout({ children, currentPageName }) {
                   >
                     <Avatar>
                       <AvatarImage src={user?.avatar_url} />
-                      <AvatarFallback>{(user?.full_name || user?.username || user?.email || 'U').charAt(0).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback>{initial}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm truncate">{user?.full_name || user?.username || "User"}</p>
-                      <p className="text-xs text-gray-500 truncate">{user?.email || user?.username || "user@email.com"}</p>
+                      <p className="font-semibold text-gray-800 text-sm truncate">{primary}</p>
+                      <p className="text-xs text-gray-500 truncate">{secondary}</p>
                     </div>
                   </Link>
                   <Button variant="ghost" size="sm" onClick={() => User.logout()} className="mt-2 w-full justify-start">
@@ -137,7 +123,8 @@ export default function Layout({ children, currentPageName }) {
                     Sign Out
                   </Button>
                 </>
-              ) : (
+                );
+              })() : (
                 /* Not logged in: always show Sign in button so users can start Hosted UI flow */
                 <div className="flex flex-col gap-2">
                   <Button

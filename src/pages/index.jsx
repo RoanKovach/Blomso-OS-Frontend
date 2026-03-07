@@ -1,4 +1,5 @@
 import Layout from "./Layout.jsx";
+import { AuthProvider } from "@/contexts/AuthContext";
 import Dashboard from "./Dashboard";
 import Upload from "./Upload";
 import Recommendations from "./Recommendations";
@@ -52,7 +53,8 @@ function PagesContent() {
     const currentPage = _getCurrentPage(location.pathname);
     
     return (
-        <Layout currentPageName={currentPage}>
+        <AuthProvider>
+            <Layout currentPageName={currentPage}>
             <Routes>            
                 
                     <Route path="/" element={<Dashboard />} />
@@ -77,7 +79,8 @@ function PagesContent() {
                 <Route path="/Analytics" element={<Analytics />} />
                 
             </Routes>
-        </Layout>
+            </Layout>
+        </AuthProvider>
     );
 }
 

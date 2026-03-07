@@ -12,6 +12,7 @@ import {
   Download
 } from "lucide-react";
 import { useTracking } from '@/components/analytics/useTracking';
+import { useAuth } from '@/contexts/AuthContext';
 
 import MiniToolsSection from "../components/dashboard/MiniToolsSection";
 import { SoilTest } from "@/api/entities";
@@ -20,6 +21,7 @@ import { CheckCircle2 } from "lucide-react";
 
 const HeroSection = () => {
   const { trackUserAction } = useTracking();
+  const { isDemoMode } = useAuth();
 
   const handleGetStarted = () => {
     trackUserAction('hero_cta_clicked', {
@@ -51,10 +53,12 @@ const HeroSection = () => {
                 e.target.style.display = 'none';
               }}
             />
-            <div className="bg-yellow-200/50 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
-              <Zap className="h-3 w-3" />
-              Demo Mode
-            </div>
+            {isDemoMode && (
+              <div className="bg-yellow-200/50 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
+                <Zap className="h-3 w-3" />
+                Demo Mode
+              </div>
+            )}
           </div>
           <h1 className="text-4xl font-bold text-gray-800">
             Transform Your Soil Data into <span className="text-emerald-600">Actionable Insights</span>
