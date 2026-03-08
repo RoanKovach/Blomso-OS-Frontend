@@ -34,7 +34,8 @@ export const useUploadAndParse = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [extractedTests, setExtractedTests] = useState([]);
-  
+  /** True when last upload used backend spine only (no in-app AI); used for truthful step-3 copy */
+  const [backendUploadOnly, setBackendUploadOnly] = useState(false);
   const isMountedRef = useRef(true);
 
   const resetState = useCallback(() => {
@@ -46,6 +47,7 @@ export const useUploadAndParse = () => {
     setResult(null);
     setError(null);
     setExtractedTests([]);
+    setBackendUploadOnly(false);
   }, []);
 
   const startProcessing = useCallback(async (file, contextData, isDemoUser = false) => {
@@ -68,6 +70,7 @@ export const useUploadAndParse = () => {
     }
 
     resetState();
+    if (isMountedRef.current) setBackendUploadOnly(useBackendUploadOnly);
     setIsProcessing(true);
     
     try {
@@ -165,7 +168,8 @@ export const useUploadAndParse = () => {
     cleanup,
     isComplete: !isProcessing && result !== null,
     hasError: error !== null,
-    canRetry: !isProcessing && error !== null
+    canRetry: !isProcessing && error !== null,
+    backendUploadOnly,
   };
 };
 

@@ -1,16 +1,15 @@
 /**
- * Extraction and normalized-save API for backend upload path.
- * C1: get extraction artifact for an upload (stub until backend implements).
- * Normalized save: prepare payload and call stub (no persistence until backend implements).
+ * Extraction API for backend upload path.
+ * When API is configured we use backend truth only; no stub so UI does not imply success without real data.
  */
 
 import { apiGet, apiPost, isApiConfigured } from './client.js';
 
 /**
- * Fetch extraction artifact for an upload (D1 shape).
- * Stub: returns mock soil_tests so review UI can be exercised. Replace with real GET when backend has extraction.
+ * Fetch extraction artifact for an upload (backend contract: artifact may have soil_tests or payload.soil_tests).
+ * When API is configured: no stub fallback — on failure or missing soil_tests returns { soil_tests: [] } so UI shows real state.
  * @param {string} uploadId - Record id from GET /records or upload complete
- * @returns {Promise<{ soil_tests: Array, uploadId?: string }>}
+ * @returns {Promise<{ soil_tests: Array, uploadId?: string, parserVersion?: string }>}
  */
 export async function getExtraction(uploadId) {
   if (!uploadId) {
@@ -19,53 +18,28 @@ export async function getExtraction(uploadId) {
   if (isApiConfigured()) {
     try {
       const res = await apiGet(`/records/${uploadId}/extraction`);
-      if (res && Array.isArray(res.soil_tests)) {
-        return { soil_tests: res.soil_tests, uploadId };
+      if (res && res.ok !== false) {
+        const soil_tests = Array.isArray(res.soil_tests)
+          ? res.soil_tests
+          : Array.isArray(res.payload?.soil_tests)
+            ? res.payload.soil_tests
+            : [];
+        if (soil_tests.length === 0 && typeof console?.debug === 'function') {
+          console.debug('[extraction] Artifact loaded but no soil_tests (placeholder or empty)', { uploadId, parserVersion: res.parserVersion });
+        }
+        return { soil_tests, uploadId, parserVersion: res.parserVersion };
       }
     } catch (_) {
-      // Backend endpoint not implemented; fall through to stub
+      // Backend endpoint may not exist or failed; return empty so UI shows "no data" not fake success
     }
+    return { soil_tests: [], uploadId };
   }
-  return getExtractionStub(uploadId);
+  return { soil_tests: [], uploadId };
 }
 
 /**
- * Stub extraction for development and E1 review flow.
- * Returns one mock candidate so user can open review and edit.
- */
-function getExtractionStub(uploadId) {
-  return {
-    uploadId,
-    soil_tests: [
-      {
-        zone_name: 'Zone 1',
-        test_date: new Date().toISOString().slice(0, 10),
-        lab_info: { lab_name: '' },
-        soil_data: {
-          ph: null,
-          organic_matter: null,
-          nitrogen: null,
-          phosphorus: null,
-          potassium: null,
-          calcium: null,
-          magnesium: null,
-          sulfur: null,
-          cec: null,
-          base_saturation: null,
-          iron: null,
-          zinc: null,
-          manganese: null,
-          copper: null,
-          boron: null,
-        },
-      },
-    ],
-  };
-}
-
-/**
- * Send normalized save payload for an upload.
- * Stub: no backend persistence yet; logs payload and returns success. Replace with real POST when backend implements.
+ * Send normalized save payload for an upload (legacy single-call shape).
+ * Prefer saveNormalizedRecords in api/records.js which calls POST /records/normalized once per test (backend contract).
  * @param {string} uploadId
  * @param {Array} shapedTests - Output of shapeSoilTestPayload() per test
  * @returns {Promise<{ ok: boolean, saved?: number }>}
@@ -74,19 +48,15 @@ export async function saveNormalized(uploadId, shapedTests) {
   if (!uploadId || !Array.isArray(shapedTests)) {
     return { ok: false };
   }
-  const payload = { uploadId, soil_tests: shapedTests };
   if (isApiConfigured()) {
     try {
-      const res = await apiPost(`/records/${uploadId}/normalized`, payload);
+      const res = await apiPost(`/records/${uploadId}/normalized`, { uploadId, soil_tests: shapedTests });
       if (res && res.ok) {
         return { ok: true, saved: res.saved ?? shapedTests.length };
       }
     } catch (_) {
-      // Backend not implemented; fall through to stub
+      // Backend may expect per-test POST /records/normalized; caller should use saveNormalizedRecords
     }
   }
-  if (typeof console !== 'undefined' && console.debug) {
-    console.debug('[extraction] saveNormalized stub', { uploadId, count: shapedTests.length, payload });
-  }
-  return { ok: true, saved: shapedTests.length };
+  return { ok: false };
 }

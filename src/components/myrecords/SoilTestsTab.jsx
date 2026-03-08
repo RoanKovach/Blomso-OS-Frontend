@@ -4,7 +4,7 @@ import { SoilTest } from "@/api/entities";
 import { Field } from "@/api/entities"; // Import Field entity
 import { User } from "@/api/entities";
 import { isUnauthenticatedError } from "@/api/auth";
-import { listRecords } from "@/api/records";
+import { listRecords, triggerExtraction } from "@/api/records";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,9 @@ export default function SoilTestsTab() {
     const [isAnonymousUser, setIsAnonymousUser] = useState(false);
     /** True when signed-in and data came from GET /records (upload placeholders), not from /soil-tests */
     const [backendRecordsMode, setBackendRecordsMode] = useState(false);
+    /** Upload records (soil_upload) for status-driven table; when backendRecordsMode we also have normalized in tests or separate list */
+    const [uploadRecords, setUploadRecords] = useState([]);
+    const [extractingId, setExtractingId] = useState(null);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -125,8 +128,9 @@ export default function SoilTestsTab() {
                 setTests([]);
                 setBackendRecordsMode(false);
             } else {
-                // Authenticated user: GET /records (uploads + normalized_soil_test). Show only normalized as soil tests.
+                // Authenticated user: GET /records (uploads + normalized_soil_test). Uploads for status table; normalized for saved tests.
                 const { records } = await listRecords();
+                const uploads = (records || []).filter((r) => r.type === 'soil_upload');
                 const normalized = (records || []).filter((r) => r.type === 'normalized_soil_test');
                 const displayTests = normalized.map((r) => ({
                     id: r.id,
@@ -142,6 +146,7 @@ export default function SoilTestsTab() {
                     createdAt: r.createdAt,
                     sourceUploadId: r.sourceUploadId,
                 }));
+                setUploadRecords(uploads);
                 setTests(displayTests);
                 setBackendRecordsMode(true);
                 setFieldsMap(new Map());
@@ -438,67 +443,164 @@ export default function SoilTestsTab() {
                 )}
             </div>
 
-            {tests.length === 0 ? (
+            {!backendRecordsMode && tests.length === 0 ? (
                 <Card className="text-center p-8">
                     <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                    <h3 className="text-lg font-semibold text-gray-800">
-                        {backendRecordsMode ? "No Uploads Yet" : "No Soil Tests Found"}
-                    </h3>
-                    <p className="text-gray-600">
-                        {isAnonymousUser ? 
-                            "No demo records found. Upload a soil test to get started!" :
-                            backendRecordsMode
-                                ? "Upload a PDF to see your files here. Extraction and review are coming soon."
-                                : "You haven't uploaded any soil tests yet."
-                        }
-                    </p>
-                    <Button 
-                        onClick={() => navigate(createPageUrl("Upload"))} 
-                        className="mt-4 bg-green-600 hover:bg-green-700"
-                    >
-                        {backendRecordsMode ? "Upload a File" : "Upload Your First Test"}
+                    <h3 className="text-lg font-semibold text-gray-800">No Soil Tests Found</h3>
+                    <p className="text-gray-600">You haven't uploaded any soil tests yet.</p>
+                    <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-4 bg-green-600 hover:bg-green-700">
+                        Upload Your First Test
                     </Button>
                 </Card>
             ) : backendRecordsMode ? (
-                /* Backend upload records: filename, createdAt, status, contentType */
-                <div className="overflow-x-auto border rounded-lg bg-white">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Filename</TableHead>
-                                <TableHead>Created</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {tests.map((rec) => (
-                                <TableRow key={rec.id} className="hover:bg-green-50/50">
-                                    <TableCell className="font-medium">{rec.filename || '—'}</TableCell>
-                                    <TableCell>{rec.createdAt ? formatLastUpdated(rec.createdAt) : '—'}</TableCell>
-                                    <TableCell><Badge variant="secondary">{rec.status || 'uploaded'}</Badge></TableCell>
-                                    <TableCell className="text-gray-500 text-sm">{rec.contentType || '—'}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => navigate(createPageUrl("Upload"), {
-                                                state: {
-                                                    backendReviewUploadId: rec.id,
-                                                    backendReviewFilename: rec.filename || ''
-                                                }
-                                            })}
-                                        >
-                                            <Eye className="w-4 h-4 mr-1" />
-                                            Review
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
+                <>
+                    {/* Upload records: backend status and extraction status drive UI */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-green-900">Uploads</h3>
+                        {uploadRecords.length === 0 ? (
+                            <Card className="text-center p-6">
+                                <p className="text-gray-600">No uploads yet. Upload a PDF to see it here.</p>
+                                <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-3 bg-green-600 hover:bg-green-700">Upload a File</Button>
+                            </Card>
+                        ) : (
+                            <div className="overflow-x-auto border rounded-lg bg-white">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Filename</TableHead>
+                                            <TableHead>Created</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {uploadRecords.map((rec) => (
+                                            <TableRow key={rec.id} className="hover:bg-green-50/50">
+                                                <TableCell className="font-medium">{rec.filename || '—'}</TableCell>
+                                                <TableCell>{rec.createdAt ? formatLastUpdated(rec.createdAt) : '—'}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-wrap gap-1 items-center">
+                                                        <Badge variant="secondary">{rec.extractionStatus ?? rec.status ?? 'uploaded'}</Badge>
+                                                        {(rec.extractionError || rec.errorMessage) && (
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent><p className="max-w-xs">{rec.extractionError || rec.errorMessage}</p></TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right space-x-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => navigate(createPageUrl("Upload"), {
+                                                            state: { backendReviewUploadId: rec.id, backendReviewFilename: rec.filename || '' }
+                                                        })}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-1" />
+                                                        Review
+                                                    </Button>
+                                                    {((rec.extractionStatus ?? rec.status) === 'extraction_failed' || (rec.extractionStatus ?? rec.status) === 'extracted' || (rec.extractionStatus ?? rec.status) === 'needs_review' || (rec.extractionStatus ?? rec.status) === 'failed') && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            disabled={extractingId === rec.id}
+                                                            onClick={async () => {
+                                                                setExtractingId(rec.id);
+                                                                try {
+                                                                    const res = await triggerExtraction(rec.id);
+                                                                    if (res?.ok) toast.success('Extraction started');
+                                                                    else toast.error('Failed to start extraction');
+                                                                } catch (_) { toast.error('Failed to start extraction'); }
+                                                                setExtractingId(null);
+                                                            }}
+                                                        >
+                                                            {extractingId === rec.id ? 'Starting…' : 'Re-run extraction'}
+                                                        </Button>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </div>
+                    {/* Saved soil tests (normalized) */}
+                    {tests.length > 0 && (
+                        <div className="space-y-4 mt-8">
+                            <h3 className="text-lg font-semibold text-green-900">Saved soil tests</h3>
+                            <div className="overflow-x-auto border rounded-lg bg-white">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-12"></TableHead>
+                                            <TableHead>Field</TableHead>
+                                            <TableHead>Linked Field</TableHead>
+                                            <TableHead>Test Date</TableHead>
+                                            <TableHead>Crop</TableHead>
+                                            <TableHead>SHI</TableHead>
+                                            <TableHead>Last Updated</TableHead>
+                                            <TableHead>Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {tests.map(test => {
+                                            const linkedFieldName = fieldsMap.get(test.field_id);
+                                            return (
+                                                <React.Fragment key={test.id}>
+                                                    <TableRow className="hover:bg-green-50/50 cursor-pointer">
+                                                        <TableCell>
+                                                            <Button variant="ghost" size="sm" onClick={() => toggleRowExpansion(test.id)} className="p-1 h-6 w-6">
+                                                                {expandedRows.has(test.id) ? '−' : '+'}
+                                                            </Button>
+                                                        </TableCell>
+                                                        <TableCell className="font-medium">{test.field_name}</TableCell>
+                                                        <TableCell>
+                                                            {linkedFieldName ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <Badge variant="outline">{linkedFieldName}</Badge>
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-500 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); navigate(createFieldDeepLink(test.field_id)); }}>
+                                                                                    <MapPin className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent><p>View on Map</p></TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                </div>
+                                                            ) : <span className="text-gray-400">—</span>}
+                                                        </TableCell>
+                                                        <TableCell>{test.test_date ? format(new Date(test.test_date), 'MMM d, yyyy') : 'N/A'}</TableCell>
+                                                        <TableCell>{test.crop_type || 'N/A'}</TableCell>
+                                                        <TableCell><Badge>{test.soil_health_index || 'N/A'}</Badge></TableCell>
+                                                        <TableCell>{formatLastUpdated(test.updated_date)}</TableCell>
+                                                        <TableCell className="space-x-2">
+                                                            <Button variant="ghost" size="icon" onClick={() => navigate(createPageUrl(`Recommendations?test_id=${test.id}`))}><Eye className="w-4 h-4" /></Button>
+                                                            <Button variant="ghost" size="icon" onClick={() => setTestToEdit(test)}><Edit className="w-4 h-4" /></Button>
+                                                            <Button variant="ghost" size="icon" onClick={() => setTestToDelete(test)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                    {expandedRows.has(test.id) && (
+                                                        <TableRow>
+                                                            <TableCell colSpan={8} className="p-0 bg-gray-50/50"><ExpandableRow test={test} /></TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                    )}
+                </>
             ) : (
                 <Tabs value={viewMode} onValueChange={setViewMode}>
                     <TabsContent value="list">

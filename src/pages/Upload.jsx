@@ -19,7 +19,8 @@ import BatchUploadModal from "../components/upload/BatchUploadModal";
 import AsyncUploadFlow from "../components/upload/AsyncUploadFlow";
 import { useUploadAndParse } from "../components/hooks/useUploadAndParse";
 import { useTracking } from '@/components/analytics/useTracking';
-import { saveNormalizedRecords } from "@/api/records";
+import { saveNormalizedRecords, getRecord } from "@/api/records";
+import { getExtraction } from "@/api/extraction";
 
 export default function UploadPage() {
     const navigate = useNavigate();
@@ -54,12 +55,15 @@ export default function UploadPage() {
         cleanup,
         isComplete,
         hasError,
-        canRetry
+        canRetry,
+        backendUploadOnly,
     } = useUploadAndParse();
 
-    /** When in backend-path review, the upload record id for extraction/save. Set when entering step 4 from upload complete or from My Records. */
+    /** When in backend-path review: upload record id and the record itself (for extractionStatus, extractionArtifactKey). */
     const [backendReviewUploadId, setBackendReviewUploadId] = useState(null);
+    const [currentRecord, setCurrentRecord] = useState(null);
     const [isLoadingExtraction, setIsLoadingExtraction] = useState(false);
+    const [extractionLoadError, setExtractionLoadError] = useState(null);
 
     // Check user status on mount
     useEffect(() => {
@@ -85,7 +89,7 @@ export default function UploadPage() {
         return cleanup;
     }, [cleanup]);
 
-    // Open backend-path review from My Records (e.g. "Review" on an upload record)
+    // Open backend-path review from My Records: fetch record first, then show status-driven UI (no stub)
     const location = useLocation();
     useEffect(() => {
         const uploadId = location.state?.backendReviewUploadId;
@@ -95,18 +99,54 @@ export default function UploadPage() {
         setBackendReviewUploadId(uploadId);
         setCurrentStep(4);
         setIsLoadingExtraction(true);
+        setExtractionLoadError(null);
+        setCurrentRecord(null);
+        setExtractedTests([]);
         window.history.replaceState({}, document.title, window.location.pathname);
-        loadExtractionForReview(uploadId, { field_name: filename || 'Upload' }, filename)
-            .then(({ success, count }) => {
+
+        (async () => {
+            try {
+                const { ok, record } = await getRecord(uploadId);
                 if (cancelled) return;
-                setIsLoadingExtraction(false);
-                if (!success || count === 0) {
-                    setExtractedTests([]);
+                if (!ok || !record) {
+                    setExtractionLoadError('Record not found.');
+                    setIsLoadingExtraction(false);
+                    return;
                 }
-            })
-            .catch(() => setIsLoadingExtraction(false));
+                setCurrentRecord(record);
+                const status = record.extractionStatus || record.status;
+                if (status === 'extracting') {
+                    setIsLoadingExtraction(false);
+                    return;
+                }
+                if (status === 'extraction_failed' || status === 'failed') {
+                    setExtractionLoadError(record.extractionError || record.errorMessage || 'Extraction failed.');
+                    setIsLoadingExtraction(false);
+                    return;
+                }
+                if (status === 'extracted' || status === 'needs_review' || record.extractionArtifactKey) {
+                    const artifact = await getExtraction(uploadId);
+                    if (cancelled) return;
+                    const candidates = (artifact.soil_tests || []).map((test, index) => ({
+                        ...test,
+                        field_name: record.filename || filename || 'Upload',
+                        zone_name: test.zone_name || `Zone ${index + 1}`,
+                        soil_data: test.soil_data || {},
+                        lab_info: test.lab_info || {},
+                        tempId: `backend_${uploadId}_${index}`,
+                        source_file_name: filename || undefined,
+                    }));
+                    setExtractedTests(candidates);
+                }
+            } catch (e) {
+                if (!cancelled) {
+                    setExtractionLoadError(e?.message || 'Failed to load record or extraction.');
+                }
+            }
+            if (!cancelled) setIsLoadingExtraction(false);
+        })();
         return () => { cancelled = true; };
-    }, [location.state?.backendReviewUploadId, location.state?.backendReviewFilename, isAnonymousUser, loadExtractionForReview]);
+    }, [location.state?.backendReviewUploadId, location.state?.backendReviewFilename, isAnonymousUser]);
 
     // Handle drag and drop
     const handleDrag = useCallback((e) => {
@@ -160,23 +200,52 @@ export default function UploadPage() {
 
     const handleContinueToReview = async () => {
         const uploadId = result?.uploadId;
-        if (uploadId) {
-            if (isLoadingExtraction) return;
-            setIsLoadingExtraction(true);
-            try {
-                const { success, count } = await loadExtractionForReview(uploadId, contextualData || {}, file?.name || '');
-                if (success && count > 0) {
-                    setBackendReviewUploadId(uploadId);
-                    setCurrentStep(4);
-                } else {
-                    toast.info('No extraction data yet. You can review from My Records when ready.');
-                }
-            } finally {
-                setIsLoadingExtraction(false);
-            }
-        } else {
+        if (!uploadId) {
             setCurrentStep(4);
+            return;
         }
+        if (isLoadingExtraction) return;
+        setIsLoadingExtraction(true);
+        setExtractionLoadError(null);
+        setCurrentRecord(null);
+        setExtractedTests([]);
+        try {
+            const { ok, record } = await getRecord(uploadId);
+            if (!ok || !record) {
+                setExtractionLoadError('Record not found.');
+                setIsLoadingExtraction(false);
+                return;
+            }
+            setBackendReviewUploadId(uploadId);
+            setCurrentRecord(record);
+            setCurrentStep(4);
+            const status = record.extractionStatus || record.status;
+            if (status === 'extracting') {
+                setIsLoadingExtraction(false);
+                return;
+            }
+            if (status === 'extraction_failed' || status === 'failed') {
+                setExtractionLoadError(record.extractionError || record.errorMessage || 'Extraction failed.');
+                setIsLoadingExtraction(false);
+                return;
+            }
+            if (status === 'extracted' || record.extractionArtifactKey) {
+                const artifact = await getExtraction(uploadId);
+                const candidates = (artifact.soil_tests || []).map((test, index) => ({
+                    ...test,
+                    field_name: contextualData?.field_name || record.filename || file?.name || 'Upload',
+                    zone_name: test.zone_name || `Zone ${index + 1}`,
+                    soil_data: test.soil_data || {},
+                    lab_info: test.lab_info || {},
+                    tempId: `backend_${uploadId}_${index}`,
+                    source_file_name: file?.name || undefined,
+                }));
+                setExtractedTests(candidates);
+            }
+        } catch (e) {
+            setExtractionLoadError(e?.message || 'Failed to load record or extraction.');
+        }
+        setIsLoadingExtraction(false);
     };
 
     const handleFinalizeAndAnalyze = async (finalizedTests) => {
@@ -187,7 +256,10 @@ export default function UploadPage() {
             setIsSaving(true);
             setSaveError(null);
             try {
-                const res = await saveNormalizedRecords(uploadId, finalizedTests);
+                const options = currentRecord?.extractionArtifactKey
+                    ? { extractionArtifactKey: currentRecord.extractionArtifactKey }
+                    : {};
+                const res = await saveNormalizedRecords(uploadId, finalizedTests, options);
                 const count = res?.count ?? res?.saved?.length ?? finalizedTests.length;
                 toast.success(`Successfully saved ${count} soil test record(s)!`);
                 navigate(createPageUrl("MyRecords"), {
@@ -197,6 +269,7 @@ export default function UploadPage() {
                     }
                 });
                 setBackendReviewUploadId(null);
+                setCurrentRecord(null);
             } catch (err) {
                 console.error("Save normalized records failed:", err);
                 const message = err?.message || (err?.response ? `Save failed: ${err.response.status}` : "Failed to save records.");
@@ -426,16 +499,70 @@ export default function UploadPage() {
                         onRetry={handleRetryUpload}
                         onContinue={isComplete ? handleContinueToReview : null}
                         canRetry={canRetry}
+                        backendUploadOnly={backendUploadOnly}
                     />
                 )}
 
-                {/* Step 4: Review Extracted Data (backend path or demo path) */}
+                {/* Step 4: Review Extracted Data — only when backend says extraction is ready and artifact has data */}
                 {currentStep === 4 && (
                     <>
                         {isLoadingExtraction ? (
                             <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
                                 <CardContent className="py-12 text-center">
-                                    <p className="text-green-700">Loading extraction data…</p>
+                                    <p className="text-green-700">Loading record and extraction status…</p>
+                                </CardContent>
+                            </Card>
+                        ) : extractionLoadError ? (
+                            <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
+                                <CardContent className="py-12 text-center space-y-4">
+                                    <Alert variant="destructive">
+                                        <AlertDescription>{extractionLoadError}</AlertDescription>
+                                    </Alert>
+                                    <Button variant="outline" onClick={() => navigate(createPageUrl("MyRecords"))}>
+                                        Back to My Records
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        ) : currentRecord?.extractionStatus === 'extracting' ? (
+                            <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
+                                <CardContent className="py-12 text-center space-y-4">
+                                    <p className="text-green-700">Extraction in progress. This usually takes a moment.</p>
+                                    <Button variant="outline" onClick={async () => {
+                                        setExtractionLoadError(null);
+                                        setIsLoadingExtraction(true);
+                                        try {
+                                            const { ok, record } = await getRecord(backendReviewUploadId);
+                                            setCurrentRecord(record || null);
+                                            if (ok && record && (record.extractionStatus === 'extracted' || record.extractionArtifactKey)) {
+                                                const artifact = await getExtraction(backendReviewUploadId);
+                                                const filename = record.filename || '';
+                                                const candidates = (artifact.soil_tests || []).map((test, index) => ({
+                                                    ...test,
+                                                    field_name: record.filename || 'Upload',
+                                                    zone_name: test.zone_name || `Zone ${index + 1}`,
+                                                    soil_data: test.soil_data || {},
+                                                    lab_info: test.lab_info || {},
+                                                    tempId: `backend_${backendReviewUploadId}_${index}`,
+                                                    source_file_name: filename || undefined,
+                                                }));
+                                                setExtractedTests(candidates);
+                                            }
+                                        } finally {
+                                            setIsLoadingExtraction(false);
+                                        }
+                                    }}>
+                                        Check again
+                                    </Button>
+                                    <Button variant="ghost" onClick={() => navigate(createPageUrl("MyRecords"))}>Back to My Records</Button>
+                                </CardContent>
+                            </Card>
+                        ) : (currentRecord?.extractionStatus === 'extraction_failed' || currentRecord?.status === 'failed') ? (
+                            <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
+                                <CardContent className="py-12 text-center space-y-4">
+                                    <Alert variant="destructive">
+                                        <AlertDescription>{currentRecord.extractionError || currentRecord.errorMessage || 'Extraction failed.'}</AlertDescription>
+                                    </Alert>
+                                    <Button variant="outline" onClick={() => navigate(createPageUrl("MyRecords"))}>Back to My Records</Button>
                                 </CardContent>
                             </Card>
                         ) : extractedTests.length > 0 ? (
@@ -452,14 +579,18 @@ export default function UploadPage() {
                                     }}
                                     onResetTest={() => {}}
                                     onFinalize={handleFinalizeAndAnalyze}
-                                    onCancel={() => { setBackendReviewUploadId(null); resetUpload(); }}
+                                    onCancel={() => { setBackendReviewUploadId(null); setCurrentRecord(null); resetUpload(); }}
                                     isSaving={isSaving}
                                 />
                             </>
                         ) : (
                             <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
                                 <CardContent className="py-12 text-center space-y-4">
-                                    <p className="text-gray-600">No extraction data available for this upload yet.</p>
+                                    <p className="text-gray-600">
+                                        {(currentRecord?.extractionStatus === 'extracted' || currentRecord?.status === 'needs_review' || currentRecord?.extractionArtifactKey)
+                                            ? 'Extraction completed but no zone-level data was extracted yet (placeholder parser). You can still save from My Records when the parser returns soil test zones.'
+                                            : 'Extraction has not completed yet. Check again in a moment or open this upload from My Records when it shows as ready.'}
+                                    </p>
                                     <Button variant="outline" onClick={() => navigate(createPageUrl("MyRecords"))}>
                                         Back to My Records
                                     </Button>

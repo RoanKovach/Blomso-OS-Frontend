@@ -4,6 +4,18 @@ Manual or out-of-band changes that affect production. Use this to keep repo memo
 
 ---
 
+## 2025-03 — Backend IaC: Codify manual AWS fixes (S3 CORS, drift report)
+
+**System area**: Backend repo (Blomso-OS-Backend). Stack: BlomsoOsBackendStack.
+
+**Change**: (1) **S3 uploads bucket CORS** was only set in the AWS Console; it is now in CDK so future deploys do not remove it. In `lib/blomso-os-backend-stack.ts`, `BlomsoUploadsBucket` is created with `cors: [{ allowedMethods: [PUT, GET, HEAD], allowedOrigins: [https://app.blomso.com, Amplify URL, http://localhost:5173], allowedHeaders: ['*'] }]`. Bucket name unchanged. (2) **API Gateway CORS** and **Cognito callback/logout URLs** were already codified (Task A1). (3) Backend repo now has `docs/DRIFT_REPORT.md` (what was console-only, what is codified, what remains manual) and `OPS_CHANGELOG.md` for IaC changes.
+
+**Why it matters**: A future `cdk deploy` will not silently wipe out the CORS/auth fixes that made uploads work.
+
+**Still manual**: Cognito Managed Login branding; Amplify custom domain and env vars. See Backend `docs/DRIFT_REPORT.md`.
+
+---
+
 ## 2025-03 — Checker: F2/F1 contract alignment (frontend save endpoint)
 
 **System area**: Frontend (Blomso-OS-Frontend) and world-model docs.

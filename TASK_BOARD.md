@@ -13,6 +13,8 @@ High-level tasks and references. Update when architecture or contracts change.
 - **F2** — Connect review flow to normalized record save. Frontend calls POST /records/normalized once per test (F1); loading/success/error; My Records shows normalized_soil_test from GET /records.
 - **D1** — Extraction pipeline skeleton. Backend: extraction Lambda (placeholder artifact to S3, status on record); trigger from upload-complete (async) and `POST /records/{id}/extract`; GET /records returns extraction fields. No full soil parsing yet.
 - **H1** — Auth callback and SPA route resilience. createPageUrl returns PascalCase paths; AuthCallback sanitizes returnTo and uses AUTH_RETURN_DEFAULT; docs/HOSTING.md and amplify-spa-rewrite.json document SPA rewrite requirement.
+- **IaC drift codification** — S3 uploads bucket CORS codified in backend CDK (BlomsoUploadsBucket); drift report in Backend `docs/DRIFT_REPORT.md`. API Gateway CORS and Cognito URLs already in code. Future deploy will not overwrite working CORS/auth.
+- **E1 status-driven Upload → Review** — Upload step 3 shows truthful copy (no fake "Processing Complete!" for backend upload). Step 4 is record-first: GET /records/{id} → extractionStatus; Review Zones only when artifact has soil_tests; explicit messages for extracting, extraction_failed, empty artifact. No stub when API configured. My Records shows uploads with extractionStatus and Re-run extraction; save passes extractionArtifactKey when available.
 
 ---
 

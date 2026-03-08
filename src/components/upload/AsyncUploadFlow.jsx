@@ -7,7 +7,8 @@ import { Brain, CheckCircle2, AlertCircle, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 
 /**
- * Component for displaying async upload progress and results
+ * Component for displaying async upload progress and results.
+ * When backendUploadOnly is true, copy reflects backend reality: upload complete, extraction started (no implied AI success).
  */
 export default function AsyncUploadFlow({ 
   isProcessing, 
@@ -17,7 +18,8 @@ export default function AsyncUploadFlow({
   error, 
   onRetry, 
   onContinue,
-  canRetry = false 
+  canRetry = false,
+  backendUploadOnly = false,
 }) {
   if (!isProcessing && !result && !error) {
     return null;
@@ -31,8 +33,8 @@ export default function AsyncUploadFlow({
           {result && <CheckCircle2 className="w-6 h-6 text-green-600" />}
           {error && <AlertCircle className="w-6 h-6 text-red-600" />}
           
-          {isProcessing && "Processing Your Soil Test"}
-          {result && "Processing Complete!"}
+          {isProcessing && (backendUploadOnly ? "Uploading…" : "Processing Your Soil Test")}
+          {result && (backendUploadOnly ? "Upload complete" : "Processing Complete!")}
           {error && "Processing Failed"}
         </CardTitle>
       </CardHeader>
@@ -50,8 +52,10 @@ export default function AsyncUploadFlow({
                   <Brain className="w-8 h-8 text-green-600" />
                 </motion.div>
               </div>
-              <h3 className="text-lg font-semibold text-green-900 mb-2">{currentStep}</h3>
-              <p className="text-green-700">Our AI is analyzing your soil data using advanced algorithms...</p>
+              <h3 className="text-lg font-semibold text-green-900 mb-2">{currentStep || (backendUploadOnly ? 'Uploading file' : 'Analyzing')}</h3>
+              <p className="text-green-700">
+                {backendUploadOnly ? 'Uploading your file and starting extraction…' : 'Our AI is analyzing your soil data using advanced algorithms...'}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -76,10 +80,12 @@ export default function AsyncUploadFlow({
             </div>
             <div>
               <h3 className="text-lg font-semibold text-green-900 mb-2">
-                Successfully Processed {result.count} Record{result.count !== 1 ? 's' : ''}!
+                {backendUploadOnly ? 'Upload complete' : `Successfully Processed ${result.count} Record${result.count !== 1 ? 's' : ''}!`}
               </h3>
               <p className="text-green-700">
-                Your soil test data has been analyzed and saved. You can now review the extracted zones.
+                {backendUploadOnly
+                  ? 'Extraction has been started. Continue to review when it’s ready (you can also open this upload from My Records).'
+                  : 'Your soil test data has been analyzed and saved. You can now review the extracted zones.'}
               </p>
             </div>
             {onContinue && (

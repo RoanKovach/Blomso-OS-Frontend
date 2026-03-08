@@ -24,6 +24,7 @@ Checklist of drift-to-code and follow-up items.
 
 - [ ] **Parser v1 (D1)**: Implement first extraction path per `docs/PARSER_STRATEGY_V1.md` (Lambda + Bedrock vision on S3 PDF → `{ soil_tests }`; new route e.g. POST `/functions/upload/extract`). Fallback: Textract + LLM when needed.
 
-- [ ] **E1 follow-up**: When backend implements `GET /records/{id}/extraction`, remove stub in `src/api/extraction.js` so `getExtraction(uploadId)` uses the real endpoint (fallback already in place).
+- [x] **E1 status-driven review**: Frontend no longer uses stub when API configured; step 4 is driven by GET /records/{id} extractionStatus. Review Zones (MultiTestReview) only when real artifact has soil_tests. Step 3 copy truthful for backend upload ("Upload complete", "Extraction has been started"). My Records shows uploads with extractionStatus and Re-run extraction.
+- [ ] **Backend**: Implement `GET /records/{id}/extraction` (return S3 artifact JSON) so frontend can load extraction data for review when extractionStatus is extracted.
 
 - [ ] **Hosting (Task H1)**: If direct routes (e.g. /Dashboard) 404 in production, add SPA rewrite in Amplify Console: Rewrite `/<*>` → `/index.html` (200). See docs/HOSTING.md and amplify-spa-rewrite.json.
