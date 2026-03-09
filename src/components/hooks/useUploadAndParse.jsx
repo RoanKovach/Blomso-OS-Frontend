@@ -4,9 +4,39 @@ import { isApiConfigured } from '@/api/client';
 import { getExtraction } from '@/api/extraction';
 import { toast } from 'sonner';
 
+const CANONICAL_TO_UI_SOIL_KEYS = {
+  ph: 'ph',
+  organic_matter_pct: 'organic_matter',
+  nitrogen_ppm: 'nitrogen',
+  phosphorus_ppm: 'phosphorus',
+  potassium_ppm: 'potassium',
+  calcium_ppm: 'calcium',
+  magnesium_ppm: 'magnesium',
+  sulfur_ppm: 'sulfur',
+  cec_meq_100g: 'cec',
+  base_saturation_pct: 'base_saturation',
+  iron_ppm: 'iron',
+  zinc_ppm: 'zinc',
+  manganese_ppm: 'manganese',
+  copper_ppm: 'copper',
+  boron_ppm: 'boron',
+};
+
+export function normalizeSoilDataKeys(rawSoilData = {}) {
+  const result = { ...rawSoilData };
+  Object.entries(CANONICAL_TO_UI_SOIL_KEYS).forEach(([backendKey, uiKey]) => {
+    const value = rawSoilData[backendKey];
+    if (value === null || value === undefined) return;
+    if (result[uiKey] === undefined || result[uiKey] === null) {
+      result[uiKey] = value;
+    }
+  });
+  return result;
+}
+
 /**
  * Maps extraction artifact (D1) candidates to review format expected by MultiTestReview.
- * Adds field_name, tempId, and ensures soil_data/lab_info exist.
+ * Adds field_name, tempId, and ensures soil_data/lab_info exist, normalizing soil_data keys.
  */
 function mapExtractionToReviewCandidates(soil_tests, contextData = {}, uploadId = '', filename = '') {
   const fieldName = contextData?.field_name || filename || 'Upload';
@@ -14,7 +44,7 @@ function mapExtractionToReviewCandidates(soil_tests, contextData = {}, uploadId 
     ...test,
     field_name: fieldName,
     zone_name: test.zone_name || `${fieldName} - Zone ${index + 1}`,
-    soil_data: test.soil_data || {},
+    soil_data: normalizeSoilDataKeys(test.soil_data || {}),
     lab_info: test.lab_info || {},
     tempId: `backend_${uploadId}_${index}`,
     source_file_name: filename || undefined,

@@ -17,7 +17,7 @@ import ContextualForm from "../components/upload/ContextualForm";
 import MultiTestReview from "../components/upload/MultiTestReview";
 import BatchUploadModal from "../components/upload/BatchUploadModal";
 import AsyncUploadFlow from "../components/upload/AsyncUploadFlow";
-import { useUploadAndParse } from "../components/hooks/useUploadAndParse";
+import { useUploadAndParse, normalizeSoilDataKeys } from "../components/hooks/useUploadAndParse";
 import { useTracking } from '@/components/analytics/useTracking';
 import { saveNormalizedRecords, getRecord } from "@/api/records";
 import { getExtraction } from "@/api/extraction";
@@ -131,7 +131,7 @@ export default function UploadPage() {
                         ...test,
                         field_name: record.filename || filename || 'Upload',
                         zone_name: test.zone_name || `Zone ${index + 1}`,
-                        soil_data: test.soil_data || {},
+                        soil_data: normalizeSoilDataKeys(test.soil_data || {}),
                         lab_info: test.lab_info || {},
                         tempId: `backend_${uploadId}_${index}`,
                         source_file_name: filename || undefined,
@@ -235,7 +235,7 @@ export default function UploadPage() {
                     ...test,
                     field_name: contextualData?.field_name || record.filename || file?.name || 'Upload',
                     zone_name: test.zone_name || `Zone ${index + 1}`,
-                    soil_data: test.soil_data || {},
+                    soil_data: normalizeSoilDataKeys(test.soil_data || {}),
                     lab_info: test.lab_info || {},
                     tempId: `backend_${uploadId}_${index}`,
                     source_file_name: file?.name || undefined,
