@@ -63,9 +63,11 @@ const HeroSection = () => {
           <h1 className="text-4xl font-bold text-gray-800">
             Transform Your Soil Data into <span className="text-emerald-600">Actionable Insights</span>
           </h1>
-          <p className="text-lg text-gray-600">
-            Explore this demo application for soil health analysis. Upload your own data or try our sample datasets to see how AI can help with agricultural insights.
-          </p>
+          {isDemoMode && (
+            <p className="text-lg text-gray-600">
+              Explore this demo application for soil health analysis. Upload your own data or try our sample datasets to see how AI can help with agricultural insights.
+            </p>
+          )}
           
           <div className="flex flex-col sm:flex-row items-center gap-4">
               <Link to={createPageUrl("Upload")}>
@@ -104,17 +106,10 @@ const HeroSection = () => {
         <div className="flex justify-center lg:justify-end">
           <div className="relative w-full max-w-md lg:max-w-lg">
             <img 
-              src="/logo-icon.png" 
-              alt="Smart Farming Technology Illustration" 
+              src="/dashboard-hero.png" 
+              alt="Blomso dashboard with soil analysis workflow" 
               className="w-full h-auto rounded-lg shadow-lg object-cover"
               style={{ aspectRatio: '4/3' }}
-              onError={(e) => {
-                console.error('Failed to load hero image');
-                e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiCiAgICAgICAgICAgICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgICAgICAgICAgPHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNGM0Y0RjYiLz4KICAgICAgICAgICAgPHBhdGggZD0iTTIxMi41IDE1MEwxODcuNSAxMjVIMjM3LjVMMjEyLjUgMTUwWiIgZmlsbD0iIjlDQTM1Ii8+CiAgICAgICAgICAgIDxwPgoKICAgICAgICAgICAgPC9wPgoKICAgICAgICAgICAgPHRleHQgeD0iMjAwIiB5PSIxODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM2QjcyODAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHR9IjUwMCI+U21hcnQgRmFybWluZyBJbGx1c3RyYXRpb248L3RleHQ+Cjwvc3ZnPgo=';
-              }}
-              onLoad={() => {
-                console.log('Hero image loaded successfully');
-              }}
             />
           </div>
         </div>
