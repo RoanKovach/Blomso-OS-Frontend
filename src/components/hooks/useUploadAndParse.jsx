@@ -5,21 +5,26 @@ import { getExtraction } from '@/api/extraction';
 import { toast } from 'sonner';
 
 const CANONICAL_TO_UI_SOIL_KEYS = {
+  // Direct mappings
   ph: 'ph',
+
+  // Backend worker ppm keys -> UI nutrient names
+  p_ppm: 'phosphorus',
+  k_ppm: 'potassium',
+  mg_ppm: 'magnesium',
+  ca_ppm: 'calcium',
+  s_ppm: 'sulfur',
+  zn_ppm: 'zinc',
+  cu_ppm: 'copper',
+  cec_meq_100g: 'cec',
+
+  // Optional / future-compatible mappings
   organic_matter_pct: 'organic_matter',
   nitrogen_ppm: 'nitrogen',
-  phosphorus_ppm: 'phosphorus',
-  potassium_ppm: 'potassium',
-  calcium_ppm: 'calcium',
-  magnesium_ppm: 'magnesium',
-  sulfur_ppm: 'sulfur',
-  cec_meq_100g: 'cec',
-  base_saturation_pct: 'base_saturation',
   iron_ppm: 'iron',
-  zinc_ppm: 'zinc',
   manganese_ppm: 'manganese',
-  copper_ppm: 'copper',
   boron_ppm: 'boron',
+  base_saturation_pct: 'base_saturation',
 };
 
 export function normalizeSoilDataKeys(rawSoilData = {}) {
@@ -43,7 +48,7 @@ function mapExtractionToReviewCandidates(soil_tests, contextData = {}, uploadId 
   return (soil_tests || []).map((test, index) => ({
     ...test,
     field_name: fieldName,
-    zone_name: test.zone_name || `${fieldName} - Zone ${index + 1}`,
+    zone_name: test.zone_name || test.field_id || `${fieldName} - Zone ${index + 1}`,
     soil_data: normalizeSoilDataKeys(test.soil_data || {}),
     lab_info: test.lab_info || {},
     tempId: `backend_${uploadId}_${index}`,

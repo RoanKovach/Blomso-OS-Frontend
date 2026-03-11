@@ -30,7 +30,7 @@ export async function getRecord(id) {
 }
 
 /**
- * Trigger extraction for an upload (POST /records/{id}/extract). Returns 202 when started.
+ * Trigger extraction for an upload (POST /extractions/{id}). Returns 202 when started.
  * @param {string} id - Upload record id
  * @returns {Promise<{ ok: boolean, id?: string, message?: string }>}
  */
@@ -38,7 +38,7 @@ export async function triggerExtraction(id) {
   if (!isApiConfigured() || !id) {
     return { ok: false };
   }
-  const res = await apiPost(`/records/${id}/extract`, {});
+  const res = await apiPost(`/extractions/${id}`, {});
   return res && res.ok ? res : { ok: false };
 }
 

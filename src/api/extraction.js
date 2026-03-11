@@ -17,7 +17,7 @@ export async function getExtraction(uploadId) {
   }
   if (isApiConfigured()) {
     try {
-      const res = await apiGet(`/records/${uploadId}/extraction`);
+      const res = await apiGet(`/extractions/${uploadId}`);
       if (res && res.ok !== false) {
         const soil_tests = Array.isArray(res.soil_tests)
           ? res.soil_tests
