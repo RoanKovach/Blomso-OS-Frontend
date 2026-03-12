@@ -13,6 +13,7 @@ import {
   entityBulkCreate,
 } from './entityHelpers.js';
 import { User } from './auth.js';
+import { listRecords, getRecord as getRecordById, updateRecord, deleteRecord } from './records.js';
 
 export { User };
 
@@ -24,27 +25,113 @@ const dataSources = 'data-sources';
 const spatialData = 'spatial-data';
 const aiContextDocuments = 'ai-context-documents';
 
+function mapNormalizedRecordToSoilTest(record) {
+  if (!record || record.type !== 'normalized_soil_test') return null;
+  const soilData = record.soil_data || {};
+  return {
+    id: record.id,
+    field_name: record.field_name ?? record.zone_name ?? 'Unnamed',
+    zone_name: record.zone_name ?? null,
+    test_date: record.test_date ?? null,
+    soil_data: soilData,
+    crop_type: record.crop_type ?? null,
+    soil_type: record.soil_type ?? null,
+    field_id: record.field_id ?? null,
+    soil_health_index: record.soil_health_index,
+    updated_date: record.updatedAt ?? record.createdAt,
+    createdAt: record.createdAt,
+    sourceUploadId: record.sourceUploadId,
+    userSub: record.userSub,
+  };
+}
+
+async function listNormalizedSoilTests(order, limit) {
+  const res = await listRecords();
+  const records = (res && res.records) || [];
+  let tests = records
+    .filter((r) => r.type === 'normalized_soil_test')
+    .map(mapNormalizedRecordToSoilTest)
+    .filter(Boolean);
+
+  if (order) {
+    const desc = order.startsWith('-');
+    const field = desc ? order.slice(1) : order;
+    tests.sort((a, b) => {
+      const av = a[field] || '';
+      const bv = b[field] || '';
+      const cmp = String(av).localeCompare(String(bv));
+      return desc ? -cmp : cmp;
+    });
+  }
+
+  if (typeof limit === 'number') {
+    tests = tests.slice(0, limit);
+  }
+  return tests;
+}
+
 export const SoilTest = {
-  list(order, limit) {
-    return entityList(soilTests, order, limit);
+  async list(order, limit) {
+    return listNormalizedSoilTests(order, limit);
   },
-  filter(filter, order, limit) {
-    return entityFilter(soilTests, filter, order, limit);
+  async filter(filter, order, limit) {
+    const all = await listNormalizedSoilTests(order, undefined);
+    if (!filter || typeof filter !== 'object') {
+      return typeof limit === 'number' ? all.slice(0, limit) : all;
+    }
+    const filtered = all.filter((t) => {
+      return Object.entries(filter).every(([key, value]) => {
+        if (key === 'created_by') {
+          // Backend already enforces ownership via userSub; ignore created_by filter.
+          return true;
+        }
+        if (key === 'id') {
+          if (Array.isArray(value)) return value.includes(t.id);
+          return t.id === value;
+        }
+        return t[key] === value;
+      });
+    });
+    return typeof limit === 'number' ? filtered.slice(0, limit) : filtered;
   },
-  get(id) {
-    return entityGet(soilTests, id);
+  async get(id) {
+    if (!id) return null;
+    const res = await getRecordById(id);
+    if (!res || !res.ok || !res.record) return null;
+    return mapNormalizedRecordToSoilTest(res.record);
   },
-  create(body) {
-    return entityCreate(soilTests, body);
+  async create(body) {
+    // Normalized soil tests are created via the extraction/records pipeline.
+    // Keep this stub to avoid accidental POSTs to legacy /soil-tests.
+    throw new Error('SoilTest.create is not supported. Use upload/extraction flow.');
   },
-  update(id, body) {
-    return entityUpdate(soilTests, id, body);
+  async update(id, body) {
+    if (!id) throw new Error('id is required');
+    const allowed = ['zone_name', 'test_date', 'field_name', 'field_id', 'crop_type', 'soil_type', 'soil_data'];
+    const payload = {};
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(body || {}, key)) {
+        payload[key] = body[key];
+      }
+    }
+    const res = await updateRecord(id, payload);
+    if (!res || !res.ok) {
+      throw new Error(res?.error || 'Failed to update soil test');
+    }
+    return mapNormalizedRecordToSoilTest(res.record);
   },
-  delete(id) {
-    return entityDelete(soilTests, id);
+  async delete(id) {
+    if (!id) throw new Error('id is required');
+    const res = await deleteRecord(id);
+    if (!res || !res.ok) {
+      throw new Error(res?.error || 'Failed to delete soil test');
+    }
+    return true;
   },
-  bulkCreate(records) {
-    return entityBulkCreate(soilTests, records);
+  async bulkCreate() {
+    // Bulk create for soil tests is handled by POST /records/normalized;
+    // keep this as a guarded stub so we do not hit non-existent /soil-tests/bulk.
+    throw new Error('SoilTest.bulkCreate is no longer supported. Use the batch upload flow.');
   },
 };
 
@@ -91,23 +178,24 @@ export const Practice = {
 };
 
 export const CropTarget = {
-  list(order, limit) {
-    return entityList(cropTargets, order, limit);
+  async list() {
+    // Crop targets are not backed by the current API; return empty to avoid hitting /crop-targets.
+    return [];
   },
-  filter(filter, order, limit) {
-    return entityFilter(cropTargets, filter, order, limit);
+  async filter() {
+    return [];
   },
-  get(id) {
-    return entityGet(cropTargets, id);
+  async get() {
+    return null;
   },
-  create(body) {
-    return entityCreate(cropTargets, body);
+  async create() {
+    throw new Error('CropTarget.create is not supported in this environment.');
   },
-  update(id, body) {
-    return entityUpdate(cropTargets, id, body);
+  async update() {
+    throw new Error('CropTarget.update is not supported in this environment.');
   },
-  delete(id) {
-    return entityDelete(cropTargets, id);
+  async delete() {
+    throw new Error('CropTarget.delete is not supported in this environment.');
   },
 };
 

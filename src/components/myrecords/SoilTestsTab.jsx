@@ -4,7 +4,7 @@ import { SoilTest } from "@/api/entities";
 import { Field } from "@/api/entities"; // Import Field entity
 import { User } from "@/api/entities";
 import { isUnauthenticatedError } from "@/api/auth";
-import { listRecords, triggerExtraction } from "@/api/records";
+import { listRecords, triggerExtraction, updateRecord, deleteRecord } from "@/api/records";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -202,10 +202,13 @@ export default function SoilTestsTab() {
             return;
         }
 
-        // For authenticated users, delete from backend.
+        // For authenticated users, delete from backend (normalized_soil_test via /records/{id}).
         setIsDeleting(true);
         try {
-            await SoilTest.delete(testToDelete.id);
+            const res = await deleteRecord(testToDelete.id);
+            if (!res.ok) {
+                throw new Error(res.error || "Backend delete failed");
+            }
             toast.success("Record deleted successfully.");
             setTests(tests.filter(t => t.id !== testToDelete.id));
         } catch (error) {
@@ -238,12 +241,16 @@ export default function SoilTestsTab() {
             return;
         }
 
-        // For authenticated users, update backend.
+        // For authenticated users, update backend (normalized_soil_test via /records/{id}).
         try {
-            await SoilTest.update(testToUpdate.id, {
+            const res = await updateRecord(testToUpdate.id, {
                 ...updatedData,
-                updated_date: now.toISOString()
+                // Backend stores updatedAt; we still send updated_date for UI consistency if needed downstream.
+                updated_date: now.toISOString(),
             });
+            if (!res.ok) {
+                throw new Error(res.error || "Backend update failed");
+            }
             if (testToEdit) setTestToEdit(null);
             await loadTests();
             toast.success("Record updated successfully.");

@@ -6,7 +6,7 @@
  * Auth required.
  */
 
-import { apiGet, apiPost, isApiConfigured } from './client.js';
+import { apiGet, apiPost, apiPut, apiDelete, isApiConfigured } from './client.js';
 
 export async function listRecords() {
   if (!isApiConfigured()) {
@@ -26,6 +26,33 @@ export async function getRecord(id) {
     return { ok: false };
   }
   const res = await apiGet(`/records/${id}`);
+  return res && res.ok ? res : { ok: false };
+}
+
+/**
+ * Update a saved record by id.
+ * For normalized soil tests, backend enforces ownership and type === normalized_soil_test.
+ * @param {string} id
+ * @param {object} body - Partial fields to update
+ */
+export async function updateRecord(id, body) {
+  if (!isApiConfigured() || !id) {
+    return { ok: false };
+  }
+  const res = await apiPut(`/records/${id}`, body ?? {});
+  return res && res.ok ? res : { ok: false };
+}
+
+/**
+ * Delete a saved record by id (DELETE /records/{id}).
+ * Only normalized_soil_test records owned by the user will be deleted.
+ * @param {string} id
+ */
+export async function deleteRecord(id) {
+  if (!isApiConfigured() || !id) {
+    return { ok: false };
+  }
+  const res = await apiDelete(`/records/${id}`);
   return res && res.ok ? res : { ok: false };
 }
 
