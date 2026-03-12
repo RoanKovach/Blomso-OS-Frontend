@@ -22,6 +22,7 @@ import { useUploadAndParse, normalizeSoilDataKeys } from "../components/hooks/us
 import { useTracking } from '@/components/analytics/useTracking';
 import { saveNormalizedRecords, getRecord } from "@/api/records";
 import { getExtraction } from "@/api/extraction";
+import { DOCUMENT_FAMILY_SOIL_TEST, DOCUMENT_FAMILY_YIELD_TICKET, getUploadCopy, getStepLabels } from "@/lib/documentFamilies";
 
 export default function UploadPage() {
     const navigate = useNavigate();
@@ -31,8 +32,8 @@ export default function UploadPage() {
     const [error, setError] = useState(null);
     const [currentStep, setCurrentStep] = useState(1);
     const [contextualData, setContextualData] = useState(null);
-  /** Selected document family for this upload (frontend-only; backend remains soil-only for now). */
-  const [documentFamily, setDocumentFamily] = useState('soil_test');
+    /** Selected document family for this upload (frontend-only; backend remains soil-only for now). */
+    const [documentFamily, setDocumentFamily] = useState(DOCUMENT_FAMILY_SOIL_TEST);
     const [isDemoUser, setIsDemoUser] = useState(false);
     const [showBatchUpload, setShowBatchUpload] = useState(false);
     const [isAnonymousUser, setIsAnonymousUser] = useState(false);
@@ -189,11 +190,11 @@ export default function UploadPage() {
     };
 
     const handleContextualSubmit = (data) => {
-    const payload = { ...data, documentFamily };
-    setContextualData(payload);
+        const payload = { ...data, documentFamily };
+        setContextualData(payload);
         setCurrentStep(3);
         // Start the async processing using the new hook
-    startProcessing(file, payload, isDemoUser || isAnonymousUser);
+        startProcessing(file, payload, isDemoUser || isAnonymousUser);
     };
 
     const handleRetryUpload = () => {
@@ -339,12 +340,13 @@ export default function UploadPage() {
 
     // Step indicator component
     const renderStepIndicator = () => {
-        const steps = [
-            { id: 1, title: "Upload File", active: currentStep === 1, completed: currentStep > 1 },
-            { id: 2, title: "Field Context", active: currentStep === 2, completed: currentStep > 2 },
-            { id: 3, title: "AI Processing", active: currentStep === 3, completed: currentStep > 3 },
-            { id: 4, title: "Review Zones", active: currentStep === 4, completed: currentStep > 4 }
-        ];
+        const labels = getStepLabels(documentFamily);
+        const steps = labels.map((title, idx) => ({
+            id: idx + 1,
+            title,
+            active: currentStep === idx + 1,
+            completed: currentStep > idx + 1,
+        }));
 
         return (
             <div className="flex justify-center mb-8">
@@ -377,6 +379,8 @@ export default function UploadPage() {
         );
     };
 
+    const uploadCopy = getUploadCopy(documentFamily);
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-amber-50 p-4 md:p-8">
             <div className="max-w-4xl mx-auto">
@@ -400,10 +404,10 @@ export default function UploadPage() {
                         <ArrowLeft className="w-4 h-4" />
                     </Button>
                     <div className="flex-1">
-            <h1 className="text-2xl md:text-3xl font-bold text-green-900">Upload Document</h1>
-            <p className="text-green-700 mt-1">
-              Upload soil tests or yield scale tickets as agricultural evidence. Soil behavior remains fully supported.
-            </p>
+                        <h1 className="text-2xl md:text-3xl font-bold text-green-900">{uploadCopy.heroTitle}</h1>
+                        <p className="text-green-700 mt-1">
+                            {uploadCopy.heroSubtitle}
+                        </p>
                     </div>
 
                     <Button
@@ -432,7 +436,7 @@ export default function UploadPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-xl font-bold text-green-900">
                                 <UploadIcon className="w-6 h-6" />
-                Step 1: Upload Your Document
+                                {uploadCopy.step1Title}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
@@ -443,7 +447,7 @@ export default function UploadPage() {
                     type="button"
                     variant={documentFamily === 'soil_test' ? 'default' : 'outline'}
                     className={documentFamily === 'soil_test' ? 'bg-green-600 hover:bg-green-700' : ''}
-                    onClick={() => setDocumentFamily('soil_test')}
+                    onClick={() => setDocumentFamily(DOCUMENT_FAMILY_SOIL_TEST)}
                     disabled={isProcessing}
                   >
                     Soil Test
@@ -452,7 +456,7 @@ export default function UploadPage() {
                     type="button"
                     variant={documentFamily === 'yield_scale_ticket' ? 'default' : 'outline'}
                     className={documentFamily === 'yield_scale_ticket' ? 'bg-green-600 hover:bg-green-700' : ''}
-                    onClick={() => setDocumentFamily('yield_scale_ticket')}
+                    onClick={() => setDocumentFamily(DOCUMENT_FAMILY_YIELD_TICKET)}
                     disabled={isProcessing}
                   >
                     Yield Scale Ticket
@@ -477,7 +481,7 @@ export default function UploadPage() {
                                         className="w-full bg-green-600 hover:bg-green-700 shadow-lg"
                                         onClick={() => setCurrentStep(2)}
                                     >
-                                        Continue to Field Context
+                                        {uploadCopy.contextCta}
                                     </Button>
                                 </div>
                             )}
