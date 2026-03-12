@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { AlertCircle, ArrowLeft, Upload as UploadIcon, FileArchive } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -30,6 +31,8 @@ export default function UploadPage() {
     const [error, setError] = useState(null);
     const [currentStep, setCurrentStep] = useState(1);
     const [contextualData, setContextualData] = useState(null);
+  /** Selected document family for this upload (frontend-only; backend remains soil-only for now). */
+  const [documentFamily, setDocumentFamily] = useState('soil_test');
     const [isDemoUser, setIsDemoUser] = useState(false);
     const [showBatchUpload, setShowBatchUpload] = useState(false);
     const [isAnonymousUser, setIsAnonymousUser] = useState(false);
@@ -186,10 +189,11 @@ export default function UploadPage() {
     };
 
     const handleContextualSubmit = (data) => {
-        setContextualData(data);
+    const payload = { ...data, documentFamily };
+    setContextualData(payload);
         setCurrentStep(3);
         // Start the async processing using the new hook
-        startProcessing(file, data, isDemoUser || isAnonymousUser);
+    startProcessing(file, payload, isDemoUser || isAnonymousUser);
     };
 
     const handleRetryUpload = () => {
@@ -396,8 +400,10 @@ export default function UploadPage() {
                         <ArrowLeft className="w-4 h-4" />
                     </Button>
                     <div className="flex-1">
-                        <h1 className="text-2xl md:text-3xl font-bold text-green-900">Upload Soil Test</h1>
-                        <p className="text-green-700 mt-1">Advanced soil analysis with zone detection and AI recommendations</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-green-900">Upload Document</h1>
+            <p className="text-green-700 mt-1">
+              Upload soil tests or yield scale tickets as agricultural evidence. Soil behavior remains fully supported.
+            </p>
                     </div>
 
                     <Button
@@ -426,10 +432,33 @@ export default function UploadPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-xl font-bold text-green-900">
                                 <UploadIcon className="w-6 h-6" />
-                                Step 1: Upload Your Soil Test Report
+                Step 1: Upload Your Document
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
+              <div className="px-6 pt-4 pb-2 space-y-3">
+                <Label className="text-sm font-medium text-green-900">Document type</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={documentFamily === 'soil_test' ? 'default' : 'outline'}
+                    className={documentFamily === 'soil_test' ? 'bg-green-600 hover:bg-green-700' : ''}
+                    onClick={() => setDocumentFamily('soil_test')}
+                    disabled={isProcessing}
+                  >
+                    Soil Test
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={documentFamily === 'yield_scale_ticket' ? 'default' : 'outline'}
+                    className={documentFamily === 'yield_scale_ticket' ? 'bg-green-600 hover:bg-green-700' : ''}
+                    onClick={() => setDocumentFamily('yield_scale_ticket')}
+                    disabled={isProcessing}
+                  >
+                    Yield Scale Ticket
+                  </Button>
+                </div>
+              </div>
                             <div
                                 onDragEnter={handleDrag}
                                 onDragLeave={handleDrag}
