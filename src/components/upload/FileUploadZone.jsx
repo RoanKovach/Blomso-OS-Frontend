@@ -3,7 +3,13 @@ import { UploadCloud, FileText, File } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-export default function FileUploadZone({ onFileSelect, dragActive, selectedFile }) {
+export default function FileUploadZone({
+  onFileSelect,
+  dragActive,
+  selectedFile,
+  title = "Upload Your Soil Test",
+  subtitle = "Drag & drop your soil test report, or click to browse",
+}) {
   const fileInputRef = useRef(null);
 
   const handleBrowseClick = () => {
@@ -37,9 +43,9 @@ export default function FileUploadZone({ onFileSelect, dragActive, selectedFile 
             <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
               <UploadCloud className="w-8 h-8 text-green-600" />
             </div>
-            <h3 className="text-xl font-bold text-green-900 mb-2">Upload Your Soil Test</h3>
+            <h3 className="text-xl font-bold text-green-900 mb-2">{title}</h3>
             <p className="text-green-700 mb-6">
-              Drag & drop your soil test report, or click to browse
+              {subtitle}
             </p>
             <Button
               type="button"

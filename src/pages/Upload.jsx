@@ -473,6 +473,8 @@ export default function UploadPage() {
                                     onFileSelect={handleFileInput}
                                     dragActive={dragActive}
                                     selectedFile={file}
+                                    title={uploadCopy.dropTitle}
+                                    subtitle={uploadCopy.dropSubtitle}
                                 />
                             </div>
                             {file && (

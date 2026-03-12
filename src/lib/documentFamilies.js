@@ -17,10 +17,13 @@ export function getUploadCopy(documentFamily) {
     return {
       heroTitle: 'Upload Document',
       heroSubtitle:
-        'Upload yield scale tickets or ton sheets as agricultural evidence. Soil test uploads are still fully supported.',
+        'Upload yield scale tickets or ton sheets as agricultural evidence.',
       step1Title: 'Step 1: Upload Your Yield Scale Ticket',
       step1Description:
         'Drag & drop your scanned scale ticket or ton sheet, or click to browse for a PDF file.',
+      dropTitle: 'Upload Your Yield Scale Ticket',
+      dropSubtitle:
+        'Drag & drop your scanned scale ticket or ton sheet, or click to browse',
       contextCta: 'Continue to Harvest Context',
     };
   }
@@ -33,6 +36,9 @@ export function getUploadCopy(documentFamily) {
     step1Title: 'Step 1: Upload Your Soil Test Report',
     step1Description:
       'Drag & drop your soil test report PDF, or click to browse.',
+    dropTitle: 'Upload Your Soil Test',
+    dropSubtitle:
+      'Drag & drop your soil test report, or click to browse',
     contextCta: 'Continue to Field Context',
   };
 }
