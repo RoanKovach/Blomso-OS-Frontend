@@ -6,7 +6,7 @@
  * Auth required.
  */
 
-import { apiGet, apiPost, apiPut, apiDelete, isApiConfigured } from './client.js';
+import { apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from './client.js';
 
 export async function listRecords() {
   if (!isApiConfigured()) {
@@ -39,7 +39,7 @@ export async function updateRecord(id, body) {
   if (!isApiConfigured() || !id) {
     return { ok: false };
   }
-  const res = await apiPut(`/records/${id}`, body ?? {});
+  const res = await apiPatch(`/records/${id}`, body ?? {});
   return res && res.ok ? res : { ok: false };
 }
 

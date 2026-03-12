@@ -102,6 +102,27 @@ export async function apiPut(path, body, options = {}) {
   return res.text();
 }
 
+export async function apiPatch(path, body, options = {}) {
+  if (!BASE_URL) {
+    throw new Error('API URL not configured. Set VITE_API_URL in your environment.');
+  }
+  const res = await fetch(getUrl(path), {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: typeof body === 'string' ? body : JSON.stringify(body ?? {}),
+    ...options,
+  });
+  if (!res.ok) {
+    const err = new Error(res.statusText || `Request failed: ${res.status}`);
+    err.status = res.status;
+    err.response = res;
+    throw err;
+  }
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) return res.json();
+  return res.text();
+}
+
 export async function apiDelete(path, options = {}) {
   if (!BASE_URL) {
     throw new Error('API URL not configured. Set VITE_API_URL in your environment.');
