@@ -125,7 +125,7 @@ export const useUploadAndParse = () => {
           
           const count = update.result?.count ?? 1;
           const successMsg = useBackendUploadOnly
-            ? `File uploaded successfully. Record saved (parsing not yet available).`
+            ? `File uploaded successfully. Extraction will run shortly. You can track status and review data in My Records.`
             : isDemoUser
               ? `Successfully processed ${count} demo record(s)!`
               : `Successfully processed ${count} soil test record(s)!`;
