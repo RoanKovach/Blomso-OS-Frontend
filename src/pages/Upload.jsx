@@ -563,17 +563,45 @@ export default function UploadPage() {
             return;
         }
 
-        if (fullMode && uploadId && isYieldTicketDocument(reviewFamily)) {
-            toast.success(
-                "Yield ticket data reviewed. Upload and extraction are saved. Normalized yield records will be supported in a future backend update."
-            );
-            navigate(createPageUrl("MyRecords"), {
-                state: {
-                    refreshData: true,
-                    successMessage:
-                        "Yield ticket data reviewed. Upload and extraction are saved. Normalized yield records will be supported later.",
-                },
-            });
+        if (
+            fullMode &&
+            uploadId &&
+            isYieldTicketDocument(reviewFamily) &&
+            Array.isArray(yieldTickets) &&
+            yieldTickets.length > 0
+        ) {
+            setIsSaving(true);
+            setSaveError(null);
+            try {
+                const options = currentRecord?.extractionArtifactKey
+                    ? {
+                        extractionArtifactKey: currentRecord.extractionArtifactKey,
+                        documentFamily: 'yield_scale_ticket',
+                    }
+                    : { documentFamily: 'yield_scale_ticket' };
+                const res = await saveNormalizedRecords(uploadId, yieldTickets, options);
+                const count = res?.count ?? res?.saved?.length ?? yieldTickets.length;
+                toast.success(
+                    `Successfully saved ${count} yield ticket${count !== 1 ? 's' : ''}!`
+                );
+                navigate(createPageUrl("MyRecords"), {
+                    state: {
+                        refreshData: true,
+                        successMessage: `Successfully saved ${count} yield ticket${count !== 1 ? 's' : ''}!`,
+                    },
+                });
+                setBackendReviewUploadId(null);
+                setCurrentRecord(null);
+            } catch (err) {
+                console.error("Save normalized yield tickets failed:", err);
+                const message =
+                    err?.message ||
+                    (err?.response ? `Save failed: ${err.response.status}` : "Failed to save yield tickets.");
+                setSaveError(message);
+                toast.error(message);
+            } finally {
+                setIsSaving(false);
+            }
             return;
         }
 
