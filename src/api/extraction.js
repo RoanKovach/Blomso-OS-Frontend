@@ -27,7 +27,14 @@ export async function getExtraction(uploadId) {
         if (soil_tests.length === 0 && typeof console?.debug === 'function') {
           console.debug('[extraction] Artifact loaded but no soil_tests (placeholder or empty)', { uploadId, parserVersion: res.parserVersion });
         }
-        return { soil_tests, uploadId, parserVersion: res.parserVersion };
+        // Preserve the full backend response (including yield_tickets or other fields)
+        // while still exposing a normalized soil_tests array for existing callers.
+        return {
+          ...res,
+          soil_tests,
+          uploadId,
+          parserVersion: res.parserVersion,
+        };
       }
     } catch (_) {
       // Backend endpoint may not exist or failed; return empty so UI shows "no data" not fake success

@@ -77,6 +77,33 @@ export default function UploadPage() {
     const effectiveDocumentFamily =
         reviewFamily || documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
 
+    const normalizeExtractionArtifact = (raw) => {
+        if (!raw) return {};
+        if (raw.soil_tests || raw.yield_tickets) return raw;
+
+        let candidate = raw;
+
+        if (raw.payload) {
+            let payload = raw.payload;
+            if (typeof payload === 'string') {
+                try {
+                    payload = JSON.parse(payload);
+                } catch {
+                    payload = null;
+                }
+            }
+            if (payload && (payload.soil_tests || payload.yield_tickets)) {
+                candidate = payload;
+            }
+        } else if (raw.artifact) {
+            candidate = raw.artifact;
+        } else if (raw.data) {
+            candidate = raw.data;
+        }
+
+        return candidate || raw || {};
+    };
+
     // Check user status on mount
     useEffect(() => {
         const checkUser = async () => {
@@ -143,7 +170,8 @@ export default function UploadPage() {
                     return;
                 }
                 if (status === 'extracted' || status === 'needs_review' || record.extractionArtifactKey) {
-                    const artifact = await getExtraction(uploadId);
+                    const raw = await getExtraction(uploadId);
+                    const artifact = normalizeExtractionArtifact(raw);
                     if (cancelled) return;
                     const rawCtx = record.contextSnapshot;
                     let ctx = null;
@@ -186,6 +214,9 @@ export default function UploadPage() {
                             artifact.yieldTickets ||
                             artifact.tickets ||
                             [];
+                        console.log('[yield-review] raw extraction response (MyRecords)', raw);
+                        console.log('[yield-review] normalized artifact (MyRecords)', artifact);
+                        console.log('[yield-review] rawTickets length (MyRecords)', rawTickets?.length ?? 0);
                         const mapped = rawTickets.map((ticket, index) => {
                             const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
                             const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
@@ -333,7 +364,8 @@ export default function UploadPage() {
                 return;
             }
             if (status === 'extracted' || record.extractionArtifactKey) {
-                const artifact = await getExtraction(uploadId);
+                const raw = await getExtraction(uploadId);
+                const artifact = normalizeExtractionArtifact(raw);
                 const rawCtx = record.contextSnapshot;
                 let ctx = null;
                 if (rawCtx) {
@@ -383,6 +415,9 @@ export default function UploadPage() {
                         artifact.yieldTickets ||
                         artifact.tickets ||
                         [];
+                    console.log('[yield-review] raw extraction response (upload flow)', raw);
+                    console.log('[yield-review] normalized artifact (upload flow)', artifact);
+                    console.log('[yield-review] rawTickets length (upload flow)', rawTickets?.length ?? 0);
                     const mapped = rawTickets.map((ticket, index) => {
                         const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
                         const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
@@ -756,7 +791,8 @@ export default function UploadPage() {
                                                     DOCUMENT_FAMILY_SOIL_TEST;
                                                 setReviewFamily(family);
                                                 setDocumentFamily(family);
-                                                const artifact = await getExtraction(backendReviewUploadId);
+                                                const raw = await getExtraction(backendReviewUploadId);
+                                                const artifact = normalizeExtractionArtifact(raw);
                                                 const filename = record.filename || '';
                                                 const rawCtx = record.contextSnapshot;
                                                 let ctx = null;
@@ -800,6 +836,9 @@ export default function UploadPage() {
                                                         artifact.yieldTickets ||
                                                         artifact.tickets ||
                                                         [];
+                                                    console.log('[yield-review] raw extraction response (check-again)', raw);
+                                                    console.log('[yield-review] normalized artifact (check-again)', artifact);
+                                                    console.log('[yield-review] rawTickets length (check-again)', rawTickets?.length ?? 0);
                                                     const mapped = rawTickets.map((ticket, index) => {
                                                         const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
                                                         const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
