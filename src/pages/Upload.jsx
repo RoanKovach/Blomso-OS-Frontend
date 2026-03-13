@@ -77,6 +77,13 @@ export default function UploadPage() {
     const effectiveDocumentFamily =
         reviewFamily || documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
 
+    const pickFirstDefined = (...values) => {
+        for (const v of values) {
+            if (v !== undefined && v !== null) return v;
+        }
+        return undefined;
+    };
+
     const normalizeExtractionArtifact = (raw) => {
         if (!raw) return {};
         if (raw.soil_tests || raw.yield_tickets) return raw;
@@ -102,6 +109,104 @@ export default function UploadPage() {
         }
 
         return candidate || raw || {};
+    };
+
+    const normalizeYieldTicket = (ticket, defaults = {}) => {
+        const {
+            cropFallback = null,
+            fieldLabel: defaultFieldLabel = null,
+        } = defaults;
+
+        const ticketNumber = pickFirstDefined(
+            ticket.ticketNumber,
+            ticket.ticket_number,
+            ticket.number,
+        );
+        const ticketDate = pickFirstDefined(
+            ticket.ticketDate,
+            ticket.ticket_date,
+            ticket.date,
+        );
+        const crop = pickFirstDefined(
+            ticket.crop,
+            ticket.crop_type,
+            cropFallback,
+        );
+        const fieldLabel = pickFirstDefined(
+            ticket.fieldLabel,
+            defaultFieldLabel,
+        );
+        const truckId = pickFirstDefined(
+            ticket.truckId,
+            ticket.vehicleId,
+            ticket.truck_id,
+            ticket.vehicle_id,
+        );
+        const grossWeight = pickFirstDefined(
+            ticket.grossWeight,
+            ticket.gross_weight,
+            ticket.gross_weight_lb,
+        );
+        const tareWeight = pickFirstDefined(
+            ticket.tareWeight,
+            ticket.tare_weight,
+            ticket.tare_weight_lb,
+        );
+        const netWeight = pickFirstDefined(
+            ticket.netWeight,
+            ticket.net_weight,
+            ticket.net_weight_lb,
+        );
+        const grossBushels = pickFirstDefined(
+            ticket.grossBushels,
+            ticket.gross_bushels,
+        );
+        const shrink = pickFirstDefined(
+            ticket.shrink,
+            ticket.shrink_bushels,
+        );
+        const netBushels = pickFirstDefined(
+            ticket.netBushels,
+            ticket.net_bushels,
+        );
+        const quantityBushels = pickFirstDefined(
+            ticket.quantityBushels,
+            ticket.quantity_bushels,
+        );
+        const moisture = pickFirstDefined(
+            ticket.moisture,
+            ticket.moisture_pct,
+        );
+        const testWeight = pickFirstDefined(
+            ticket.testWeight,
+            ticket.test_weight,
+            ticket.test_weight_lb_bu,
+        );
+        const pricePerBushel = pickFirstDefined(
+            ticket.pricePerBushel,
+            ticket.price_per_bushel,
+            ticket.price_per_bu,
+            ticket.price,
+        );
+
+        return {
+            ...ticket,
+            ticketNumber,
+            ticketDate,
+            crop,
+            fieldLabel,
+            truckId,
+            grossWeight,
+            tareWeight,
+            netWeight,
+            grossBushels,
+            shrink,
+            netBushels,
+            quantityBushels,
+            moisture,
+            testWeight,
+            pricePerBushel,
+        };
     };
 
     // Check user status on mount
@@ -218,46 +323,19 @@ export default function UploadPage() {
                         console.log('[yield-review] normalized artifact (MyRecords)', artifact);
                         console.log('[yield-review] rawTickets length (MyRecords)', rawTickets?.length ?? 0);
                         const mapped = rawTickets.map((ticket, index) => {
-                            const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
-                            const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
-                            const netBushels =
-                                ticket.netBushels ||
-                                ticket.net_bushels ||
-                                ticket.quantityBushels ||
-                                ticket.quantity_bushels ||
-                                null;
-                            const crop =
-                                ticket.crop ||
-                                ticket.crop_type ||
-                                cropFallback ||
-                                null;
-                            const fieldLabelValue =
-                                ticket.fieldLabel ||
-                                record.enteredFieldLabel ||
-                                ctx?.field_name ||
-                                record.filename ||
-                                filename ||
-                                'Upload';
+                            const defaults = {
+                                cropFallback,
+                                fieldLabel:
+                                    ticket.fieldLabel ||
+                                    record.enteredFieldLabel ||
+                                    ctx?.field_name ||
+                                    record.filename ||
+                                    filename ||
+                                    'Upload',
+                            };
+                            const normalized = normalizeYieldTicket(ticket, defaults);
                             return {
-                                ...ticket,
-                                ticketNumber,
-                                ticketDate,
-                                crop,
-                                fieldLabel: fieldLabelValue,
-                                truckId: ticket.truckId || ticket.vehicleId || ticket.truck_id || ticket.vehicle_id || null,
-                                grossWeight: ticket.grossWeight || ticket.gross_weight || null,
-                                tareWeight: ticket.tareWeight || ticket.tare_weight || null,
-                                netWeight: ticket.netWeight || ticket.net_weight || null,
-                                moisture: ticket.moisture ?? null,
-                                testWeight: ticket.testWeight || ticket.test_weight || null,
-                                grossBushels: ticket.grossBushels || ticket.gross_bushels || null,
-                                shrink: ticket.shrink ?? null,
-                                netBushels,
-                                pricePerBushel:
-                                    ticket.pricePerBushel ||
-                                    ticket.price_per_bushel ||
-                                    ticket.price ||
-                                    null,
+                                ...normalized,
                                 tempId: `yield_${uploadId}_${index}`,
                             };
                         });
@@ -419,48 +497,21 @@ export default function UploadPage() {
                     console.log('[yield-review] normalized artifact (upload flow)', artifact);
                     console.log('[yield-review] rawTickets length (upload flow)', rawTickets?.length ?? 0);
                     const mapped = rawTickets.map((ticket, index) => {
-                        const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
-                        const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
-                        const netBushels =
-                            ticket.netBushels ||
-                            ticket.net_bushels ||
-                            ticket.quantityBushels ||
-                            ticket.quantity_bushels ||
-                            null;
-                        const crop =
-                            ticket.crop ||
-                            ticket.crop_type ||
-                            cropFallback ||
-                            null;
-                        const fieldLabelValue =
-                            ticket.fieldLabel ||
-                            contextualData?.enteredFieldLabel ||
-                            contextualData?.field_name ||
-                            record.enteredFieldLabel ||
-                            ctx?.field_name ||
-                            record.filename ||
-                            file?.name ||
-                            'Upload';
+                        const defaults = {
+                            cropFallback,
+                            fieldLabel:
+                                ticket.fieldLabel ||
+                                contextualData?.enteredFieldLabel ||
+                                contextualData?.field_name ||
+                                record.enteredFieldLabel ||
+                                ctx?.field_name ||
+                                record.filename ||
+                                file?.name ||
+                                'Upload',
+                        };
+                        const normalized = normalizeYieldTicket(ticket, defaults);
                         return {
-                            ...ticket,
-                            ticketNumber,
-                            ticketDate,
-                            crop,
-                            fieldLabel: fieldLabelValue,
-                            truckId: ticket.truckId || ticket.vehicleId || ticket.truck_id || ticket.vehicle_id || null,
-                            grossWeight: ticket.grossWeight || ticket.gross_weight || null,
-                            tareWeight: ticket.tareWeight || ticket.tare_weight || null,
-                            netWeight: ticket.netWeight || ticket.net_weight || null,
-                            moisture: ticket.moisture ?? null,
-                            testWeight: ticket.testWeight || ticket.test_weight || null,
-                            grossBushels: ticket.grossBushels || ticket.gross_bushels || null,
-                            shrink: ticket.shrink ?? null,
-                            netBushels,
-                            pricePerBushel:
-                                ticket.pricePerBushel ||
-                                ticket.price_per_bushel ||
-                                ticket.price ||
-                                null,
+                            ...normalized,
                             tempId: `yield_${uploadId}_${index}`,
                         };
                     });
@@ -840,46 +891,19 @@ export default function UploadPage() {
                                                     console.log('[yield-review] normalized artifact (check-again)', artifact);
                                                     console.log('[yield-review] rawTickets length (check-again)', rawTickets?.length ?? 0);
                                                     const mapped = rawTickets.map((ticket, index) => {
-                                                        const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
-                                                        const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
-                                                        const netBushels =
-                                                            ticket.netBushels ||
-                                                            ticket.net_bushels ||
-                                                            ticket.quantityBushels ||
-                                                            ticket.quantity_bushels ||
-                                                            null;
-                                                        const crop =
-                                                            ticket.crop ||
-                                                            ticket.crop_type ||
-                                                            cropFallback ||
-                                                            null;
-                                                        const fieldLabelValue =
-                                                            ticket.fieldLabel ||
-                                                            record.enteredFieldLabel ||
-                                                            ctx?.field_name ||
-                                                            record.filename ||
-                                                            filename ||
-                                                            'Upload';
+                                                        const defaults = {
+                                                            cropFallback,
+                                                            fieldLabel:
+                                                                ticket.fieldLabel ||
+                                                                record.enteredFieldLabel ||
+                                                                ctx?.field_name ||
+                                                                record.filename ||
+                                                                filename ||
+                                                                'Upload',
+                                                        };
+                                                        const normalized = normalizeYieldTicket(ticket, defaults);
                                                         return {
-                                                            ...ticket,
-                                                            ticketNumber,
-                                                            ticketDate,
-                                                            crop,
-                                                            fieldLabel: fieldLabelValue,
-                                                            truckId: ticket.truckId || ticket.vehicleId || ticket.truck_id || ticket.vehicle_id || null,
-                                                            grossWeight: ticket.grossWeight || ticket.gross_weight || null,
-                                                            tareWeight: ticket.tareWeight || ticket.tare_weight || null,
-                                                            netWeight: ticket.netWeight || ticket.net_weight || null,
-                                                            moisture: ticket.moisture ?? null,
-                                                            testWeight: ticket.testWeight || ticket.test_weight || null,
-                                                            grossBushels: ticket.grossBushels || ticket.gross_bushels || null,
-                                                            shrink: ticket.shrink ?? null,
-                                                            netBushels,
-                                                            pricePerBushel:
-                                                                ticket.pricePerBushel ||
-                                                                ticket.price_per_bushel ||
-                                                                ticket.price ||
-                                                                null,
+                                                            ...normalized,
                                                             tempId: `yield_${backendReviewUploadId}_${index}`,
                                                         };
                                                     });
