@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function SoilTestsTab() {
     const [tests, setTests] = useState([]);
+    const [yieldRecords, setYieldRecords] = useState([]);
     const [fieldsMap, setFieldsMap] = useState(new Map()); // State for Field ID -> Name mapping
     const [isLoading, setIsLoading] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -152,12 +153,9 @@ export default function SoilTestsTab() {
                 }));
                 setUploadRecords(uploads);
                 setTests(displayTests);
+                setYieldRecords(yieldNormalized || []);
                 setBackendRecordsMode(true);
                 setFieldsMap(new Map());
-                // Yield ticket normalized records are surfaced separately in the UI.
-                // For now we keep their raw shape and render a simplified table.
-                // eslint-disable-next-line no-unused-vars
-                const yieldRecords = yieldNormalized;
             }
         } catch (error) {
             console.error("Error in loadTests:", error);
@@ -600,74 +598,149 @@ export default function SoilTestsTab() {
                             </div>
                         )}
                     </div>
-                    {/* Saved soil tests (normalized) */}
-                    {tests.length > 0 && (
-                        <div className="space-y-4 mt-8">
-                            <h3 className="text-lg font-semibold text-green-900">Saved soil tests</h3>
-                            <div className="overflow-x-auto border rounded-lg bg-white">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-12"></TableHead>
-                                            <TableHead>Field</TableHead>
-                                            <TableHead>Linked Field</TableHead>
-                                            <TableHead>Test Date</TableHead>
-                                            <TableHead>Crop</TableHead>
-                                            <TableHead>SHI</TableHead>
-                                            <TableHead>Last Updated</TableHead>
-                                            <TableHead>Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {tests.map(test => {
-                                            const linkedFieldName = fieldsMap.get(test.field_id);
-                                            return (
-                                                <React.Fragment key={test.id}>
-                                                    <TableRow className="hover:bg-green-50/50 cursor-pointer">
-                                                        <TableCell>
-                                                            <Button variant="ghost" size="sm" onClick={() => toggleRowExpansion(test.id)} className="p-1 h-6 w-6">
-                                                                {expandedRows.has(test.id) ? '−' : '+'}
-                                                            </Button>
-                                                        </TableCell>
-                                                        <TableCell className="font-medium">{test.field_name}</TableCell>
-                                                        <TableCell>
-                                                            {linkedFieldName ? (
-                                                                <div className="flex items-center gap-2">
-                                                                    <Badge variant="outline">{linkedFieldName}</Badge>
-                                                                    <TooltipProvider>
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger asChild>
-                                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-500 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); navigate(createFieldDeepLink(test.field_id)); }}>
-                                                                                    <MapPin className="h-4 w-4" />
-                                                                                </Button>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent><p>View on Map</p></TooltipContent>
-                                                                        </Tooltip>
-                                                                    </TooltipProvider>
-                                                                </div>
-                                                            ) : <span className="text-gray-400">—</span>}
-                                                        </TableCell>
-                                                        <TableCell>{test.test_date ? format(new Date(test.test_date), 'MMM d, yyyy') : 'N/A'}</TableCell>
-                                                        <TableCell>{test.crop_type || 'N/A'}</TableCell>
-                                                        <TableCell><Badge>{test.soil_health_index || 'N/A'}</Badge></TableCell>
-                                                        <TableCell>{formatLastUpdated(test.updated_date)}</TableCell>
-                                                        <TableCell className="space-x-2">
-                                                            <Button variant="ghost" size="icon" onClick={() => navigate(createPageUrl(`Recommendations?test_id=${test.id}`))}><Eye className="w-4 h-4" /></Button>
-                                                            <Button variant="ghost" size="icon" onClick={() => setTestToEdit(test)}><Edit className="w-4 h-4" /></Button>
-                                                            <Button variant="ghost" size="icon" onClick={() => setTestToDelete(test)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                    {expandedRows.has(test.id) && (
-                                                        <TableRow>
-                                                            <TableCell colSpan={8} className="p-0 bg-gray-50/50"><ExpandableRow test={test} /></TableCell>
+                    {/* Saved records (normalized soil + yield) */}
+                    {(tests.length > 0 || yieldRecords.length > 0) && (
+                        <div className="space-y-6 mt-8">
+                            <h3 className="text-lg font-semibold text-green-900">Saved records</h3>
+
+                            {tests.length > 0 && (
+                                <div className="space-y-3">
+                                    <h4 className="text-md font-semibold text-green-800">Saved Soil Tests</h4>
+                                    <div className="overflow-x-auto border rounded-lg bg-white">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead className="w-12"></TableHead>
+                                                    <TableHead>Field</TableHead>
+                                                    <TableHead>Linked Field</TableHead>
+                                                    <TableHead>Test Date</TableHead>
+                                                    <TableHead>Crop</TableHead>
+                                                    <TableHead>SHI</TableHead>
+                                                    <TableHead>Last Updated</TableHead>
+                                                    <TableHead>Actions</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {tests.map(test => {
+                                                    const linkedFieldName = fieldsMap.get(test.field_id);
+                                                    return (
+                                                        <React.Fragment key={test.id}>
+                                                            <TableRow className="hover:bg-green-50/50 cursor-pointer">
+                                                                <TableCell>
+                                                                    <Button variant="ghost" size="sm" onClick={() => toggleRowExpansion(test.id)} className="p-1 h-6 w-6">
+                                                                        {expandedRows.has(test.id) ? '−' : '+'}
+                                                                    </Button>
+                                                                </TableCell>
+                                                                <TableCell className="font-medium">{test.field_name}</TableCell>
+                                                                <TableCell>
+                                                                    {linkedFieldName ? (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Badge variant="outline">{linkedFieldName}</Badge>
+                                                                            <TooltipProvider>
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger asChild>
+                                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-500 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); navigate(createFieldDeepLink(test.field_id)); }}>
+                                                                                            <MapPin className="h-4 w-4" />
+                                                                                        </Button>
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent><p>View on Map</p></TooltipContent>
+                                                                                </Tooltip>
+                                                                            </TooltipProvider>
+                                                                        </div>
+                                                                    ) : <span className="text-gray-400">—</span>}
+                                                                </TableCell>
+                                                                <TableCell>{test.test_date ? format(new Date(test.test_date), 'MMM d, yyyy') : 'N/A'}</TableCell>
+                                                                <TableCell>{test.crop_type || 'N/A'}</TableCell>
+                                                                <TableCell><Badge>{test.soil_health_index || 'N/A'}</Badge></TableCell>
+                                                                <TableCell>{formatLastUpdated(test.updated_date)}</TableCell>
+                                                                <TableCell className="space-x-2">
+                                                                    <Button variant="ghost" size="icon" onClick={() => navigate(createPageUrl(`Recommendations?test_id=${test.id}`))}><Eye className="w-4 h-4" /></Button>
+                                                                    <Button variant="ghost" size="icon" onClick={() => setTestToEdit(test)}><Edit className="w-4 h-4" /></Button>
+                                                                    <Button variant="ghost" size="icon" onClick={() => setTestToDelete(test)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                            {expandedRows.has(test.id) && (
+                                                                <TableRow>
+                                                                    <TableCell colSpan={8} className="p-0 bg-gray-50/50"><ExpandableRow test={test} /></TableCell>
+                                                                </TableRow>
+                                                            )}
+                                                        </React.Fragment>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {yieldRecords.length > 0 && (
+                                <div className="space-y-3">
+                                    <h4 className="text-md font-semibold text-green-800">Saved Yield Tickets</h4>
+                                    <div className="overflow-x-auto border rounded-lg bg-white">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Ticket Number</TableHead>
+                                                    <TableHead>Field</TableHead>
+                                                    <TableHead>Crop</TableHead>
+                                                    <TableHead>Ticket Date</TableHead>
+                                                    <TableHead>Net Bushels</TableHead>
+                                                    <TableHead>Price/Bu</TableHead>
+                                                    <TableHead>Last Updated</TableHead>
+                                                    <TableHead>Actions</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {yieldRecords.map((rec) => {
+                                                    const ticketNumber = rec.ticket_number ?? rec.ticketNumber ?? '—';
+                                                    const fieldName = rec.field_name ?? '—';
+                                                    const crop = rec.crop ?? rec.crop_type ?? '—';
+                                                    const ticketDateRaw = rec.ticket_date ?? rec.ticketDate ?? null;
+                                                    const ticketDate = ticketDateRaw
+                                                        ? format(new Date(ticketDateRaw), 'MMM d, yyyy')
+                                                        : '—';
+                                                    const netBushelsValue =
+                                                        rec.net_bushels ??
+                                                        rec.netBushels ??
+                                                        rec.quantity_bushels ??
+                                                        rec.quantityBushels ??
+                                                        null;
+                                                    const netBushels = netBushelsValue ?? '—';
+                                                    const priceValue =
+                                                        rec.price_per_bu ??
+                                                        rec.pricePerBushel ??
+                                                        rec.price_per_bushel ??
+                                                        null;
+                                                    const price = priceValue ?? '—';
+                                                    const lastUpdated = formatLastUpdated(rec.updatedAt ?? rec.createdAt);
+
+                                                    return (
+                                                        <TableRow key={rec.id} className="hover:bg-green-50/50">
+                                                            <TableCell className="font-medium">{ticketNumber}</TableCell>
+                                                            <TableCell>{fieldName}</TableCell>
+                                                            <TableCell>{crop}</TableCell>
+                                                            <TableCell>{ticketDate}</TableCell>
+                                                            <TableCell>{netBushels}</TableCell>
+                                                            <TableCell>{price}</TableCell>
+                                                            <TableCell>{lastUpdated}</TableCell>
+                                                            <TableCell className="space-x-2">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    disabled
+                                                                    title="Yield ticket detail view coming soon"
+                                                                >
+                                                                    <Eye className="w-4 h-4" />
+                                                                </Button>
+                                                            </TableCell>
                                                         </TableRow>
-                                                    )}
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </>
