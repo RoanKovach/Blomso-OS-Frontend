@@ -110,7 +110,7 @@ export default function YieldTicketReview({
                                         />
                                         <EditableField
                                             id={`grossWeight_${ticket.tempId}`}
-                                            label="Gross Weight"
+                                            label="Gross Weight (lb)"
                                             type="number"
                                             value={ticket.grossWeight}
                                             onChange={(e) =>
@@ -124,7 +124,7 @@ export default function YieldTicketReview({
                                         />
                                         <EditableField
                                             id={`tareWeight_${ticket.tempId}`}
-                                            label="Tare Weight"
+                                            label="Tare Weight (lb)"
                                             type="number"
                                             value={ticket.tareWeight}
                                             onChange={(e) =>
@@ -141,7 +141,7 @@ export default function YieldTicketReview({
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <EditableField
                                             id={`netWeight_${ticket.tempId}`}
-                                            label="Net Weight"
+                                            label="Net Weight (lb)"
                                             type="number"
                                             value={ticket.netWeight}
                                             onChange={(e) =>
@@ -169,7 +169,7 @@ export default function YieldTicketReview({
                                         />
                                         <EditableField
                                             id={`testWeight_${ticket.tempId}`}
-                                            label="Test Weight"
+                                            label="Test Weight (lb/bu)"
                                             type="number"
                                             value={ticket.testWeight}
                                             onChange={(e) =>
@@ -186,7 +186,7 @@ export default function YieldTicketReview({
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <EditableField
                                             id={`grossBushels_${ticket.tempId}`}
-                                            label="Gross Bushels"
+                                            label="Gross Bushels (bu)"
                                             type="number"
                                             value={ticket.grossBushels}
                                             onChange={(e) =>
@@ -200,7 +200,7 @@ export default function YieldTicketReview({
                                         />
                                         <EditableField
                                             id={`shrink_${ticket.tempId}`}
-                                            label="Shrink"
+                                            label="Shrink (bu)"
                                             type="number"
                                             value={ticket.shrink}
                                             onChange={(e) =>
@@ -214,7 +214,7 @@ export default function YieldTicketReview({
                                         />
                                         <EditableField
                                             id={`netBushels_${ticket.tempId}`}
-                                            label="Net Bushels"
+                                            label="Net Bushels (bu)"
                                             type="number"
                                             value={ticket.netBushels ?? ticket.quantityBushels}
                                             onChange={(e) =>
@@ -231,7 +231,7 @@ export default function YieldTicketReview({
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <EditableField
                                             id={`pricePerBushel_${ticket.tempId}`}
-                                            label="Price per Bushel"
+                                            label="Price per Bushel ($/bu)"
                                             type="number"
                                             value={ticket.pricePerBushel}
                                             onChange={(e) =>
