@@ -515,6 +515,14 @@ export default function SoilTestsTab() {
                                     <TableBody>
                                         {uploadRecords.map((rec) => {
                                             const ctx = getContext(rec);
+                                            const rawStatus = rec.extractionStatus ?? rec.status ?? 'uploaded';
+                                            const hasSavedNormalized = tests.some(
+                                                (t) => t.sourceUploadId === rec.id
+                                            );
+                                            const displayStatus =
+                                                hasSavedNormalized && rawStatus === 'needs_review'
+                                                    ? 'saved'
+                                                    : rawStatus;
                                             return (
                                                 <TableRow key={rec.id} className="hover:bg-green-50/50">
                                                     <TableCell className="font-medium">{rec.filename || '—'}</TableCell>
@@ -537,7 +545,7 @@ export default function SoilTestsTab() {
                                                     <TableCell>{rec.createdAt ? formatLastUpdated(rec.createdAt) : '—'}</TableCell>
                                                     <TableCell>
                                                         <div className="flex flex-wrap gap-1 items-center">
-                                                            <Badge variant="secondary">{rec.extractionStatus ?? rec.status ?? 'uploaded'}</Badge>
+                                                            <Badge variant="secondary">{displayStatus}</Badge>
                                                             {(rec.extractionError || rec.errorMessage) && (
                                                                 <TooltipProvider>
                                                                     <Tooltip>

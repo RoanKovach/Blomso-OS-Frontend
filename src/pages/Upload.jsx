@@ -140,13 +140,37 @@ export default function UploadPage() {
                 if (status === 'extracted' || status === 'needs_review' || record.extractionArtifactKey) {
                     const artifact = await getExtraction(uploadId);
                     if (cancelled) return;
+                    const rawCtx = record.contextSnapshot;
+                    let ctx = null;
+                    if (rawCtx) {
+                        if (typeof rawCtx === 'string') {
+                            try {
+                                ctx = JSON.parse(rawCtx);
+                            } catch {
+                                ctx = null;
+                            }
+                        } else {
+                            ctx = rawCtx;
+                        }
+                    }
+                    const fieldLabel =
+                        record.enteredFieldLabel ||
+                        ctx?.field_name ||
+                        record.filename ||
+                        filename ||
+                        'Upload';
+                    const cropFallback = ctx?.intended_crop || null;
+                    const soilTypeFallback = ctx?.soil_type || null;
+
                     if (isSoilDocument(family)) {
                         const candidates = (artifact.soil_tests || []).map((test, index) => ({
                             ...test,
-                            field_name: record.filename || filename || 'Upload',
+                            field_name: test.field_name || fieldLabel,
                             zone_name: test.zone_name || `Zone ${index + 1}`,
                             soil_data: normalizeSoilDataKeys(test.soil_data || {}),
                             lab_info: test.lab_info || {},
+                            crop_type: test.crop_type || cropFallback || null,
+                            soil_type: test.soil_type || soilTypeFallback || null,
                             tempId: `backend_${uploadId}_${index}`,
                             source_file_name: filename || undefined,
                         }));
@@ -166,11 +190,24 @@ export default function UploadPage() {
                                 ticket.quantityBushels ||
                                 ticket.quantity_bushels ||
                                 null;
+                            const crop =
+                                ticket.crop ||
+                                ticket.crop_type ||
+                                cropFallback ||
+                                null;
+                            const fieldLabelValue =
+                                ticket.fieldLabel ||
+                                record.enteredFieldLabel ||
+                                ctx?.field_name ||
+                                record.filename ||
+                                filename ||
+                                'Upload';
                             return {
                                 ...ticket,
                                 ticketNumber,
                                 ticketDate,
-                                crop: ticket.crop || ticket.crop_type || null,
+                                crop,
+                                fieldLabel: fieldLabelValue,
                                 truckId: ticket.truckId || ticket.vehicleId || ticket.truck_id || ticket.vehicle_id || null,
                                 grossWeight: ticket.grossWeight || ticket.gross_weight || null,
                                 tareWeight: ticket.tareWeight || ticket.tare_weight || null,
@@ -288,13 +325,45 @@ export default function UploadPage() {
             }
             if (status === 'extracted' || record.extractionArtifactKey) {
                 const artifact = await getExtraction(uploadId);
+                const rawCtx = record.contextSnapshot;
+                let ctx = null;
+                if (rawCtx) {
+                    if (typeof rawCtx === 'string') {
+                        try {
+                            ctx = JSON.parse(rawCtx);
+                        } catch {
+                            ctx = null;
+                        }
+                    } else {
+                        ctx = rawCtx;
+                    }
+                }
+                const fieldLabel =
+                    contextualData?.enteredFieldLabel ||
+                    contextualData?.field_name ||
+                    record.enteredFieldLabel ||
+                    ctx?.field_name ||
+                    record.filename ||
+                    file?.name ||
+                    'Upload';
+                const cropFallback =
+                    contextualData?.intended_crop ||
+                    ctx?.intended_crop ||
+                    null;
+                const soilTypeFallback =
+                    contextualData?.soil_type ||
+                    ctx?.soil_type ||
+                    null;
+
                 if (isSoilDocument(family)) {
                     const candidates = (artifact.soil_tests || []).map((test, index) => ({
                         ...test,
-                        field_name: contextualData?.field_name || record.filename || file?.name || 'Upload',
+                        field_name: test.field_name || fieldLabel,
                         zone_name: test.zone_name || `Zone ${index + 1}`,
                         soil_data: normalizeSoilDataKeys(test.soil_data || {}),
                         lab_info: test.lab_info || {},
+                        crop_type: test.crop_type || cropFallback || null,
+                        soil_type: test.soil_type || soilTypeFallback || null,
                         tempId: `backend_${uploadId}_${index}`,
                         source_file_name: file?.name || undefined,
                     }));
@@ -314,11 +383,26 @@ export default function UploadPage() {
                             ticket.quantityBushels ||
                             ticket.quantity_bushels ||
                             null;
+                        const crop =
+                            ticket.crop ||
+                            ticket.crop_type ||
+                            cropFallback ||
+                            null;
+                        const fieldLabelValue =
+                            ticket.fieldLabel ||
+                            contextualData?.enteredFieldLabel ||
+                            contextualData?.field_name ||
+                            record.enteredFieldLabel ||
+                            ctx?.field_name ||
+                            record.filename ||
+                            file?.name ||
+                            'Upload';
                         return {
                             ...ticket,
                             ticketNumber,
                             ticketDate,
-                            crop: ticket.crop || ticket.crop_type || null,
+                            crop,
+                            fieldLabel: fieldLabelValue,
                             truckId: ticket.truckId || ticket.vehicleId || ticket.truck_id || ticket.vehicle_id || null,
                             grossWeight: ticket.grossWeight || ticket.gross_weight || null,
                             tareWeight: ticket.tareWeight || ticket.tare_weight || null,
@@ -657,18 +741,99 @@ export default function UploadPage() {
                                             const { ok, record } = await getRecord(backendReviewUploadId);
                                             setCurrentRecord(record || null);
                                             if (ok && record && (record.extractionStatus === 'extracted' || record.extractionArtifactKey)) {
+                                                const family = record.documentFamily || reviewFamily || DOCUMENT_FAMILY_SOIL_TEST;
+                                                setReviewFamily(family);
                                                 const artifact = await getExtraction(backendReviewUploadId);
                                                 const filename = record.filename || '';
-                                                const candidates = (artifact.soil_tests || []).map((test, index) => ({
-                                                    ...test,
-                                                    field_name: record.filename || 'Upload',
-                                                    zone_name: test.zone_name || `Zone ${index + 1}`,
-                                                    soil_data: test.soil_data || {},
-                                                    lab_info: test.lab_info || {},
-                                                    tempId: `backend_${backendReviewUploadId}_${index}`,
-                                                    source_file_name: filename || undefined,
-                                                }));
-                                                setExtractedTests(candidates);
+                                                const rawCtx = record.contextSnapshot;
+                                                let ctx = null;
+                                                if (rawCtx) {
+                                                    if (typeof rawCtx === 'string') {
+                                                        try {
+                                                            ctx = JSON.parse(rawCtx);
+                                                        } catch {
+                                                            ctx = null;
+                                                        }
+                                                    } else {
+                                                        ctx = rawCtx;
+                                                    }
+                                                }
+                                                const fieldLabel =
+                                                    record.enteredFieldLabel ||
+                                                    ctx?.field_name ||
+                                                    record.filename ||
+                                                    filename ||
+                                                    'Upload';
+                                                const cropFallback = ctx?.intended_crop || null;
+                                                const soilTypeFallback = ctx?.soil_type || null;
+
+                                                if (isSoilDocument(family)) {
+                                                    const candidates = (artifact.soil_tests || []).map((test, index) => ({
+                                                        ...test,
+                                                        field_name: test.field_name || fieldLabel,
+                                                        zone_name: test.zone_name || `Zone ${index + 1}`,
+                                                        soil_data: normalizeSoilDataKeys(test.soil_data || {}),
+                                                        lab_info: test.lab_info || {},
+                                                        crop_type: test.crop_type || cropFallback || null,
+                                                        soil_type: test.soil_type || soilTypeFallback || null,
+                                                        tempId: `backend_${backendReviewUploadId}_${index}`,
+                                                        source_file_name: filename || undefined,
+                                                    }));
+                                                    setExtractedTests(candidates);
+                                                    setYieldTickets([]);
+                                                } else if (isYieldTicketDocument(family)) {
+                                                    const rawTickets =
+                                                        artifact.yield_tickets ||
+                                                        artifact.yieldTickets ||
+                                                        artifact.tickets ||
+                                                        [];
+                                                    const mapped = rawTickets.map((ticket, index) => {
+                                                        const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
+                                                        const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
+                                                        const netBushels =
+                                                            ticket.netBushels ||
+                                                            ticket.net_bushels ||
+                                                            ticket.quantityBushels ||
+                                                            ticket.quantity_bushels ||
+                                                            null;
+                                                        const crop =
+                                                            ticket.crop ||
+                                                            ticket.crop_type ||
+                                                            cropFallback ||
+                                                            null;
+                                                        const fieldLabelValue =
+                                                            ticket.fieldLabel ||
+                                                            record.enteredFieldLabel ||
+                                                            ctx?.field_name ||
+                                                            record.filename ||
+                                                            filename ||
+                                                            'Upload';
+                                                        return {
+                                                            ...ticket,
+                                                            ticketNumber,
+                                                            ticketDate,
+                                                            crop,
+                                                            fieldLabel: fieldLabelValue,
+                                                            truckId: ticket.truckId || ticket.vehicleId || ticket.truck_id || ticket.vehicle_id || null,
+                                                            grossWeight: ticket.grossWeight || ticket.gross_weight || null,
+                                                            tareWeight: ticket.tareWeight || ticket.tare_weight || null,
+                                                            netWeight: ticket.netWeight || ticket.net_weight || null,
+                                                            moisture: ticket.moisture ?? null,
+                                                            testWeight: ticket.testWeight || ticket.test_weight || null,
+                                                            grossBushels: ticket.grossBushels || ticket.gross_bushels || null,
+                                                            shrink: ticket.shrink ?? null,
+                                                            netBushels,
+                                                            pricePerBushel:
+                                                                ticket.pricePerBushel ||
+                                                                ticket.price_per_bushel ||
+                                                                ticket.price ||
+                                                                null,
+                                                            tempId: `yield_${backendReviewUploadId}_${index}`,
+                                                        };
+                                                    });
+                                                    setYieldTickets(mapped);
+                                                    setExtractedTests([]);
+                                                }
                                             }
                                         } finally {
                                             setIsLoadingExtraction(false);
