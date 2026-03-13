@@ -42,10 +42,12 @@ import { format, subDays, subWeeks, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 
 import { AnalyticsService } from '../components/analytics/AnalyticsService';
+import { useAuth } from '@/contexts/AuthContext';
 
 const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#6b7280'];
 
 export default function AnalyticsPage() {
+  const { isDemoMode } = useAuth();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -135,7 +137,10 @@ export default function AnalyticsPage() {
   };
 
   const handleExport = () => {
-    // Mock export functionality
+    if (isDemoMode) {
+      toast.info('Create an account to get access');
+      return;
+    }
     toast.success('Analytics export feature coming soon');
   };
 

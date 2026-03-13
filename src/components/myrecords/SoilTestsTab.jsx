@@ -444,13 +444,13 @@ export default function SoilTestsTab() {
                     <AlertDescription>
                         {isAnonymousUser ? (
                             <>
-                                You are viewing temporary records. This data is not saved.
+                                You are viewing temporary records. Create an account to get access and save your data permanently.
                                 <Button 
                                     variant="link" 
                                     className="p-0 h-auto text-blue-800 underline ml-1"
                                     onClick={() => User.login()}
                                 >
-                                    Sign up to save your data permanently!
+                                    Create an account
                                 </Button>
                             </>
                         ) : (
@@ -770,7 +770,7 @@ export default function SoilTestsTab() {
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     disabled
-                                                                    title="Yield ticket detail view coming soon"
+                                                                    title="Create an account to view yield ticket details"
                                                                 >
                                                                     <Eye className="w-4 h-4" />
                                                                 </Button>

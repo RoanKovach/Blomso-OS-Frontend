@@ -16,9 +16,10 @@ import {
   Search
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function FieldManager({ fields, selectedField, onSelectField, onDeleteField, onStartDrawing, isLoading }) {
-    
+    const { isDemoMode } = useAuth();
     const [searchTerm, setSearchTerm] = React.useState('');
 
     const filteredFields = fields.filter(field => 
@@ -27,10 +28,18 @@ export default function FieldManager({ fields, selectedField, onSelectField, onD
     );
 
     const handleShapefileImport = () => {
+        if (isDemoMode) {
+            toast.info('Create an account to get access');
+            return;
+        }
         toast.info('Shapefile import coming soon!');
     };
 
     const handleClaimPublicBoundary = () => {
+        if (isDemoMode) {
+            toast.info('Create an account to get access');
+            return;
+        }
         toast.info('Public boundary claiming coming soon!');
     };
 

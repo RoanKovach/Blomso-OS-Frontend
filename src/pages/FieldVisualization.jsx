@@ -1,10 +1,11 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from 'react-router-dom';
 import { MapContainer, TileLayer, GeoJSON, Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { useTracking } from '@/components/analytics/useTracking';
 import { useToasts } from '@/components/hooks/useToasts';
+import { useAuth } from '@/contexts/AuthContext';
+import DemoGate from '@/components/DemoGate';
 
 import FieldSidebar from "../components/visualization/FieldSidebar";
 import FieldCreationModal from "../components/visualization/FieldCreationModal";
@@ -87,7 +88,7 @@ function MapEventHandler({ mode, showCreationModal, onMapClick, mapRef }) {
   return null;
 }
 
-export default function FieldVisualizationPage() {
+function FieldVisualizationContent() {
   const location = useLocation();
 
   // Map state
@@ -497,4 +498,17 @@ export default function FieldVisualizationPage() {
       />
     </div>
   );
+}
+
+export default function FieldVisualizationPage() {
+  const { isDemoMode } = useAuth();
+  if (isDemoMode) {
+    return (
+      <DemoGate
+        title="Field visualization"
+        message="Field visualization is available for full accounts. Create an account to get access."
+      />
+    );
+  }
+  return <FieldVisualizationContent />;
 }
