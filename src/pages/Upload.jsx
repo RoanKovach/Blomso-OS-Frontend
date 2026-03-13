@@ -74,6 +74,9 @@ export default function UploadPage() {
     /** Structured yield tickets for review when reviewFamily is yield. */
     const [yieldTickets, setYieldTickets] = useState([]);
 
+    const effectiveDocumentFamily =
+        reviewFamily || documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
+
     // Check user status on mount
     useEffect(() => {
         const checkUser = async () => {
@@ -123,8 +126,10 @@ export default function UploadPage() {
                     return;
                 }
                 setCurrentRecord(record);
-                const family = record.documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
+                const hintedFamily = location.state?.backendReviewDocumentFamily || null;
+                const family = record.documentFamily || hintedFamily || DOCUMENT_FAMILY_SOIL_TEST;
                 setReviewFamily(family);
+                setDocumentFamily(family);
                 setExtractedTests([]);
                 setYieldTickets([]);
                 const status = record.extractionStatus || record.status;
@@ -310,8 +315,12 @@ export default function UploadPage() {
             }
             setBackendReviewUploadId(uploadId);
             setCurrentRecord(record);
-            const family = record.documentFamily || contextualData?.documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
+            const family =
+                record.documentFamily ||
+                contextualData?.documentFamily ||
+                DOCUMENT_FAMILY_SOIL_TEST;
             setReviewFamily(family);
+            setDocumentFamily(family);
             setCurrentStep(4);
             const status = record.extractionStatus || record.status;
             if (status === 'extracting') {
@@ -536,7 +545,7 @@ export default function UploadPage() {
 
     // Step indicator component
     const renderStepIndicator = () => {
-        const labels = getStepLabels(documentFamily);
+        const labels = getStepLabels(effectiveDocumentFamily);
         const steps = labels.map((title, idx) => ({
             id: idx + 1,
             title,
@@ -575,7 +584,7 @@ export default function UploadPage() {
         );
     };
 
-    const uploadCopy = getUploadCopy(documentFamily);
+    const uploadCopy = getUploadCopy(effectiveDocumentFamily);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-amber-50 p-4 md:p-8">
@@ -741,8 +750,12 @@ export default function UploadPage() {
                                             const { ok, record } = await getRecord(backendReviewUploadId);
                                             setCurrentRecord(record || null);
                                             if (ok && record && (record.extractionStatus === 'extracted' || record.extractionArtifactKey)) {
-                                                const family = record.documentFamily || reviewFamily || DOCUMENT_FAMILY_SOIL_TEST;
+                                                const family =
+                                                    record.documentFamily ||
+                                                    reviewFamily ||
+                                                    DOCUMENT_FAMILY_SOIL_TEST;
                                                 setReviewFamily(family);
+                                                setDocumentFamily(family);
                                                 const artifact = await getExtraction(backendReviewUploadId);
                                                 const filename = record.filename || '';
                                                 const rawCtx = record.contextSnapshot;

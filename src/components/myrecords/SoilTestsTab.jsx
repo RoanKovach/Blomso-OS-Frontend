@@ -563,7 +563,11 @@ export default function SoilTestsTab() {
                                                             variant="outline"
                                                             size="sm"
                                                             onClick={() => navigate(createPageUrl("Upload"), {
-                                                                state: { backendReviewUploadId: rec.id, backendReviewFilename: rec.filename || '' }
+                                                                state: {
+                                                                    backendReviewUploadId: rec.id,
+                                                                    backendReviewFilename: rec.filename || '',
+                                                                    backendReviewDocumentFamily: rec.documentFamily || null,
+                                                                }
                                                             })}
                                                         >
                                                             <Eye className="w-4 h-4 mr-1" />
