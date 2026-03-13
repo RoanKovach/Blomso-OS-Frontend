@@ -110,7 +110,7 @@ export const useUploadAndParse = () => {
     
     try {
       const generator = useBackendUploadOnly
-        ? uploadFileToBackend(file)
+        ? uploadFileToBackend(file, contextData)
         : UploadService.processFile(file, contextData, isDemoUser);
 
       for await (const update of generator) {

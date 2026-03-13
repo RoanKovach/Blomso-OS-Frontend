@@ -8,9 +8,10 @@ import { format } from 'date-fns';
  * Backend upload spine only: init -> PUT to S3 -> complete.
  * No parsing. Used when authenticated and VITE_API_URL is set.
  */
-export async function* uploadFileToBackend(file) {
+export async function* uploadFileToBackend(file, contextData = {}) {
   const filename = file.name || 'document.pdf';
   const contentType = file.type || 'application/pdf';
+  const documentFamily = contextData?.documentFamily || 'soil_test';
 
   yield { status: 'processing', progress: 20, currentStep: 'Requesting upload URL...' };
 
@@ -37,6 +38,7 @@ export async function* uploadFileToBackend(file) {
     key: initRes.key,
     filename,
     contentType,
+    documentFamily,
   });
 
   yield {
