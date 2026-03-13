@@ -2,9 +2,9 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, MapPin, Calendar, Sprout } from "lucide-react";
-import { format } from "date-fns";
+import { formatDateOnlySafe } from "./dateUtils";
 
-export default function ExpandableRow({ test }) {
+export default function ExpandableRow({ test, displayFieldName, displayCrop, displayAcres }) {
     const soilData = test.soil_data || {};
     
     const nutrients = [
@@ -35,8 +35,8 @@ export default function ExpandableRow({ test }) {
                 <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
                     <MapPin className="w-5 h-5 text-green-600" />
                     <div>
-                        <p className="text-sm text-gray-500">Zone</p>
-                        <p className="font-semibold">{test.zone_name || 'Main'}</p>
+                        <p className="text-sm text-gray-500">Field / Zone</p>
+                        <p className="font-semibold">{displayFieldName ?? test.field_name ?? test.zone_name ?? 'Main'}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
@@ -44,7 +44,7 @@ export default function ExpandableRow({ test }) {
                     <div>
                         <p className="text-sm text-gray-500">Test Date</p>
                         <p className="font-semibold">
-                            {test.test_date ? format(new Date(test.test_date), 'MMM d, yyyy') : 'N/A'}
+                            {formatDateOnlySafe(test.test_date) || 'N/A'}
                         </p>
                     </div>
                 </div>
@@ -52,14 +52,14 @@ export default function ExpandableRow({ test }) {
                     <Sprout className="w-5 h-5 text-amber-600" />
                     <div>
                         <p className="text-sm text-gray-500">Crop</p>
-                        <p className="font-semibold">{test.crop_type || 'Not specified'}</p>
+                        <p className="font-semibold">{displayCrop ?? test.crop_type ?? 'Not specified'}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
                     <Activity className="w-5 h-5 text-purple-600" />
                     <div>
                         <p className="text-sm text-gray-500">Field Size</p>
-                        <p className="font-semibold">{test.field_size_acres || 0} acres</p>
+                        <p className="font-semibold">{(displayAcres ?? test.field_size_acres) ?? 0} acres</p>
                     </div>
                 </div>
             </div>

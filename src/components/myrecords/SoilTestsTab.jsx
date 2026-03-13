@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { SoilTest } from "@/api/entities";
 import { Field } from "@/api/entities"; // Import Field entity
 import { User } from "@/api/entities";
@@ -23,6 +23,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import EditSoilTestModal from "./EditSoilTestModal";
 import GridView from "./GridView";
 import ExpandableRow from "./ExpandableRow";
+import { formatDateOnlySafe } from "./dateUtils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function SoilTestsTab() {
@@ -338,6 +339,35 @@ export default function SoilTestsTab() {
         return formatted.charAt(0).toUpperCase() + formatted.slice(1);
     };
 
+    const sourceUploadMap = useMemo(
+        () => new Map((uploadRecords || []).map((u) => [u.id, u])),
+        [uploadRecords]
+    );
+
+    const getSavedSoilDisplay = useCallback(
+        (test) => {
+            const upload = test.sourceUploadId ? sourceUploadMap.get(test.sourceUploadId) : null;
+            const ctx = upload ? getContext(upload) : null;
+            const displayFieldName =
+                test.field_name ||
+                upload?.linkedFieldName ||
+                upload?.enteredFieldLabel ||
+                ctx?.field_name ||
+                upload?.filename ||
+                "Unnamed";
+            const displayCrop =
+                test.crop_type ?? ctx?.intended_crop ?? null;
+            const displayAcres =
+                test.field_size_acres != null
+                    ? test.field_size_acres
+                    : ctx?.field_size_acres != null
+                        ? ctx.field_size_acres
+                        : null;
+            return { displayFieldName, displayCrop, displayAcres };
+        },
+        [sourceUploadMap]
+    );
+
     const handleExport = async () => {
         setIsExporting(true);
         try {
@@ -571,7 +601,7 @@ export default function SoilTestsTab() {
                                                             <Eye className="w-4 h-4 mr-1" />
                                                             Review
                                                         </Button>
-                                                        {((rec.extractionStatus ?? rec.status) === 'extraction_failed' || (rec.extractionStatus ?? rec.status) === 'extracted' || (rec.extractionStatus ?? rec.status) === 'needs_review' || (rec.extractionStatus ?? rec.status) === 'failed') && (
+                                                        {displayStatus !== 'saved' && (rawStatus === 'extraction_failed' || rawStatus === 'extracted' || rawStatus === 'needs_review' || rawStatus === 'failed') && (
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
@@ -622,7 +652,9 @@ export default function SoilTestsTab() {
                                             </TableHeader>
                                             <TableBody>
                                                 {tests.map(test => {
+                                                    const { displayFieldName, displayCrop, displayAcres } = getSavedSoilDisplay(test);
                                                     const linkedFieldName = fieldsMap.get(test.field_id);
+                                                    const testDateStr = formatDateOnlySafe(test.test_date) || 'N/A';
                                                     return (
                                                         <React.Fragment key={test.id}>
                                                             <TableRow className="hover:bg-green-50/50 cursor-pointer">
@@ -631,7 +663,7 @@ export default function SoilTestsTab() {
                                                                         {expandedRows.has(test.id) ? '−' : '+'}
                                                                     </Button>
                                                                 </TableCell>
-                                                                <TableCell className="font-medium">{test.field_name}</TableCell>
+                                                                <TableCell className="font-medium">{displayFieldName}</TableCell>
                                                                 <TableCell>
                                                                     {linkedFieldName ? (
                                                                         <div className="flex items-center gap-2">
@@ -649,8 +681,8 @@ export default function SoilTestsTab() {
                                                                         </div>
                                                                     ) : <span className="text-gray-400">—</span>}
                                                                 </TableCell>
-                                                                <TableCell>{test.test_date ? format(new Date(test.test_date), 'MMM d, yyyy') : 'N/A'}</TableCell>
-                                                                <TableCell>{test.crop_type || 'N/A'}</TableCell>
+                                                                <TableCell>{testDateStr}</TableCell>
+                                                                <TableCell>{displayCrop ?? 'N/A'}</TableCell>
                                                                 <TableCell><Badge>{test.soil_health_index || 'N/A'}</Badge></TableCell>
                                                                 <TableCell>{formatLastUpdated(test.updated_date)}</TableCell>
                                                                 <TableCell className="space-x-2">
@@ -661,7 +693,14 @@ export default function SoilTestsTab() {
                                                             </TableRow>
                                                             {expandedRows.has(test.id) && (
                                                                 <TableRow>
-                                                                    <TableCell colSpan={8} className="p-0 bg-gray-50/50"><ExpandableRow test={test} /></TableCell>
+                                                                    <TableCell colSpan={8} className="p-0 bg-gray-50/50">
+                                                                        <ExpandableRow
+                                                                            test={test}
+                                                                            displayFieldName={displayFieldName}
+                                                                            displayCrop={displayCrop}
+                                                                            displayAcres={displayAcres}
+                                                                        />
+                                                                    </TableCell>
                                                                 </TableRow>
                                                             )}
                                                         </React.Fragment>
@@ -694,10 +733,13 @@ export default function SoilTestsTab() {
                                                 {yieldRecords.map((rec) => {
                                                     const ticketNumber = rec.ticket_number ?? rec.ticketNumber ?? '—';
                                                     const fieldName = rec.field_name ?? '—';
-                                                    const crop = rec.crop ?? rec.crop_type ?? '—';
+                                                    const cropRaw = rec.crop ?? rec.crop_type ?? '—';
+                                                    const crop = cropRaw && cropRaw !== '—'
+                                                        ? cropRaw.charAt(0).toUpperCase() + cropRaw.slice(1).toLowerCase()
+                                                        : cropRaw;
                                                     const ticketDateRaw = rec.ticket_date ?? rec.ticketDate ?? null;
                                                     const ticketDate = ticketDateRaw
-                                                        ? format(new Date(ticketDateRaw), 'MMM d, yyyy')
+                                                        ? (formatDateOnlySafe(ticketDateRaw) || format(new Date(ticketDateRaw), 'MMM d, yyyy'))
                                                         : '—';
                                                     const netBushelsValue =
                                                         rec.net_bushels ??
@@ -765,7 +807,9 @@ export default function SoilTestsTab() {
                                     </TableHeader>
                                     <TableBody>
                                         {tests.map(test => {
+                                            const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
                                             const linkedFieldName = fieldsMap.get(test.field_id);
+                                            const testDateStr = formatDateOnlySafe(test.test_date) || 'N/A';
                                             return (
                                                 <React.Fragment key={test.id}>
                                                     <TableRow className="hover:bg-green-50/50 cursor-pointer">
@@ -779,7 +823,7 @@ export default function SoilTestsTab() {
                                                                 {expandedRows.has(test.id) ? '−' : '+'}
                                                             </Button>
                                                         </TableCell>
-                                                        <TableCell className="font-medium">{test.field_name}</TableCell>
+                                                        <TableCell className="font-medium">{displayFieldName}</TableCell>
                                                         {/* New Cell Renderer */}
                                                         <TableCell>
                                                             {linkedFieldName ? (
@@ -810,8 +854,8 @@ export default function SoilTestsTab() {
                                                               <span className="text-gray-400">—</span>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell>{test.test_date ? format(new Date(test.test_date), 'MMM d, yyyy') : 'N/A'}</TableCell>
-                                                        <TableCell>{test.crop_type || 'N/A'}</TableCell>
+                                                        <TableCell>{testDateStr}</TableCell>
+                                                        <TableCell>{displayCrop ?? 'N/A'}</TableCell>
                                                         <TableCell><Badge>{test.soil_health_index || 'N/A'}</Badge></TableCell>
                                                         <TableCell>{formatLastUpdated(test.updated_date)}</TableCell>
                                                         <TableCell className="space-x-2">
@@ -829,7 +873,12 @@ export default function SoilTestsTab() {
                                                     {expandedRows.has(test.id) && (
                                                         <TableRow>
                                                             <TableCell colSpan={8} className="p-0 bg-gray-50/50"> {/* Colspan updated to 8 */}
-                                                                <ExpandableRow test={test} />
+                                                                <ExpandableRow
+                                                                    test={test}
+                                                                    displayFieldName={displayFieldName}
+                                                                    displayCrop={displayCrop}
+                                                                    displayAcres={getSavedSoilDisplay(test).displayAcres}
+                                                                />
                                                             </TableCell>
                                                         </TableRow>
                                                     )}
@@ -843,7 +892,9 @@ export default function SoilTestsTab() {
 
                         <div className="md:hidden space-y-3">
                             {tests.map(test => {
+                                const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
                                 const linkedFieldName = fieldsMap.get(test.field_id);
+                                const testDateStr = formatDateOnlySafe(test.test_date) || 'N/A';
                                 return (
                                 <Card key={test.id} className="shadow-sm">
                                     <CardContent className="p-4">
@@ -851,9 +902,9 @@ export default function SoilTestsTab() {
                                             {/* Header row */}
                                             <div className="flex justify-between items-start">
                                                 <div className="min-w-0 flex-1 mr-3">
-                                                    <h3 className="font-bold text-lg text-gray-900 truncate">{test.field_name}</h3>
+                                                    <h3 className="font-bold text-lg text-gray-900 truncate">{displayFieldName}</h3>
                                                     <p className="text-sm text-gray-500">
-                                                        {test.test_date ? format(new Date(test.test_date), 'MMM d, yyyy') : 'N/A'}
+                                                        {testDateStr}
                                                     </p>
                                                 </div>
                                                 <Badge className="flex-shrink-0">{test.soil_health_index || 'N/A'}</Badge>
@@ -863,7 +914,7 @@ export default function SoilTestsTab() {
                                             <div className="grid grid-cols-2 gap-3 text-sm">
                                                 <div>
                                                     <span className="text-gray-500">Crop:</span>
-                                                    <div className="font-medium text-gray-900">{test.crop_type || 'N/A'}</div>
+                                                    <div className="font-medium text-gray-900">{displayCrop ?? 'N/A'}</div>
                                                 </div>
                                                 <div>
                                                     <span className="text-gray-500">Updated:</span>
