@@ -48,6 +48,16 @@ export function getStepLabels(documentFamily) {
     return ['Upload File', 'Harvest Context', 'AI Processing', 'Review Ticket Data'];
   }
   // Default soil_test labels (preserve existing semantics)
-  return ['Upload File', 'Field Context', 'AI Processing', 'Review Soil Data'];
+  return ['Upload File', 'Field Context', 'AI Processing', 'Review Extracted Data'];
+}
+
+export function getReviewTitle(documentFamily) {
+  if (isYieldTicketDocument(documentFamily)) {
+    return 'Review Yield Ticket Data';
+  }
+  if (isSoilDocument(documentFamily)) {
+    return 'Review Soil Test Data';
+  }
+  return 'Review Extracted Data';
 }
 

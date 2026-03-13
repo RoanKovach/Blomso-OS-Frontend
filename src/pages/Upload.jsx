@@ -16,13 +16,14 @@ import { toast } from 'sonner';
 import FileUploadZone from "../components/upload/FileUploadZone";
 import ContextualForm from "../components/upload/ContextualForm";
 import MultiTestReview from "../components/upload/MultiTestReview";
+import YieldTicketReview from "../components/upload/YieldTicketReview";
 import BatchUploadModal from "../components/upload/BatchUploadModal";
 import AsyncUploadFlow from "../components/upload/AsyncUploadFlow";
 import { useUploadAndParse, normalizeSoilDataKeys } from "../components/hooks/useUploadAndParse";
 import { useTracking } from '@/components/analytics/useTracking';
 import { saveNormalizedRecords, getRecord } from "@/api/records";
 import { getExtraction } from "@/api/extraction";
-import { DOCUMENT_FAMILY_SOIL_TEST, DOCUMENT_FAMILY_YIELD_TICKET, getUploadCopy, getStepLabels } from "@/lib/documentFamilies";
+import { DOCUMENT_FAMILY_SOIL_TEST, DOCUMENT_FAMILY_YIELD_TICKET, getUploadCopy, getStepLabels, isSoilDocument, isYieldTicketDocument } from "@/lib/documentFamilies";
 
 export default function UploadPage() {
     const navigate = useNavigate();
@@ -63,11 +64,15 @@ export default function UploadPage() {
         backendUploadOnly,
     } = useUploadAndParse();
 
-    /** When in backend-path review: upload record id and the record itself (for extractionStatus, extractionArtifactKey). */
+    /** When in backend-path review: upload record id and the record itself (for extractionStatus, extractionArtifactKey, documentFamily). */
     const [backendReviewUploadId, setBackendReviewUploadId] = useState(null);
     const [currentRecord, setCurrentRecord] = useState(null);
     const [isLoadingExtraction, setIsLoadingExtraction] = useState(false);
     const [extractionLoadError, setExtractionLoadError] = useState(null);
+    /** Which document family is being reviewed in step 4 (soil_test, yield_scale_ticket, etc.). */
+    const [reviewFamily, setReviewFamily] = useState(DOCUMENT_FAMILY_SOIL_TEST);
+    /** Structured yield tickets for review when reviewFamily is yield. */
+    const [yieldTickets, setYieldTickets] = useState([]);
 
     // Check user status on mount
     useEffect(() => {
@@ -118,6 +123,10 @@ export default function UploadPage() {
                     return;
                 }
                 setCurrentRecord(record);
+                const family = record.documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
+                setReviewFamily(family);
+                setExtractedTests([]);
+                setYieldTickets([]);
                 const status = record.extractionStatus || record.status;
                 if (status === 'extracting') {
                     setIsLoadingExtraction(false);
@@ -131,16 +140,56 @@ export default function UploadPage() {
                 if (status === 'extracted' || status === 'needs_review' || record.extractionArtifactKey) {
                     const artifact = await getExtraction(uploadId);
                     if (cancelled) return;
-                    const candidates = (artifact.soil_tests || []).map((test, index) => ({
-                        ...test,
-                        field_name: record.filename || filename || 'Upload',
-                        zone_name: test.zone_name || `Zone ${index + 1}`,
-                        soil_data: normalizeSoilDataKeys(test.soil_data || {}),
-                        lab_info: test.lab_info || {},
-                        tempId: `backend_${uploadId}_${index}`,
-                        source_file_name: filename || undefined,
-                    }));
-                    setExtractedTests(candidates);
+                    if (isSoilDocument(family)) {
+                        const candidates = (artifact.soil_tests || []).map((test, index) => ({
+                            ...test,
+                            field_name: record.filename || filename || 'Upload',
+                            zone_name: test.zone_name || `Zone ${index + 1}`,
+                            soil_data: normalizeSoilDataKeys(test.soil_data || {}),
+                            lab_info: test.lab_info || {},
+                            tempId: `backend_${uploadId}_${index}`,
+                            source_file_name: filename || undefined,
+                        }));
+                        setExtractedTests(candidates);
+                    } else if (isYieldTicketDocument(family)) {
+                        const rawTickets =
+                            artifact.yield_tickets ||
+                            artifact.yieldTickets ||
+                            artifact.tickets ||
+                            [];
+                        const mapped = rawTickets.map((ticket, index) => {
+                            const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
+                            const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
+                            const netBushels =
+                                ticket.netBushels ||
+                                ticket.net_bushels ||
+                                ticket.quantityBushels ||
+                                ticket.quantity_bushels ||
+                                null;
+                            return {
+                                ...ticket,
+                                ticketNumber,
+                                ticketDate,
+                                crop: ticket.crop || ticket.crop_type || null,
+                                truckId: ticket.truckId || ticket.vehicleId || ticket.truck_id || ticket.vehicle_id || null,
+                                grossWeight: ticket.grossWeight || ticket.gross_weight || null,
+                                tareWeight: ticket.tareWeight || ticket.tare_weight || null,
+                                netWeight: ticket.netWeight || ticket.net_weight || null,
+                                moisture: ticket.moisture ?? null,
+                                testWeight: ticket.testWeight || ticket.test_weight || null,
+                                grossBushels: ticket.grossBushels || ticket.gross_bushels || null,
+                                shrink: ticket.shrink ?? null,
+                                netBushels,
+                                pricePerBushel:
+                                    ticket.pricePerBushel ||
+                                    ticket.price_per_bushel ||
+                                    ticket.price ||
+                                    null,
+                                tempId: `yield_${uploadId}_${index}`,
+                            };
+                        });
+                        setYieldTickets(mapped);
+                    }
                 }
             } catch (e) {
                 if (!cancelled) {
@@ -214,6 +263,7 @@ export default function UploadPage() {
         setExtractionLoadError(null);
         setCurrentRecord(null);
         setExtractedTests([]);
+        setYieldTickets([]);
         try {
             const { ok, record } = await getRecord(uploadId);
             if (!ok || !record) {
@@ -223,6 +273,8 @@ export default function UploadPage() {
             }
             setBackendReviewUploadId(uploadId);
             setCurrentRecord(record);
+            const family = record.documentFamily || contextualData?.documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
+            setReviewFamily(family);
             setCurrentStep(4);
             const status = record.extractionStatus || record.status;
             if (status === 'extracting') {
@@ -236,16 +288,56 @@ export default function UploadPage() {
             }
             if (status === 'extracted' || record.extractionArtifactKey) {
                 const artifact = await getExtraction(uploadId);
-                const candidates = (artifact.soil_tests || []).map((test, index) => ({
-                    ...test,
-                    field_name: contextualData?.field_name || record.filename || file?.name || 'Upload',
-                    zone_name: test.zone_name || `Zone ${index + 1}`,
-                    soil_data: normalizeSoilDataKeys(test.soil_data || {}),
-                    lab_info: test.lab_info || {},
-                    tempId: `backend_${uploadId}_${index}`,
-                    source_file_name: file?.name || undefined,
-                }));
-                setExtractedTests(candidates);
+                if (isSoilDocument(family)) {
+                    const candidates = (artifact.soil_tests || []).map((test, index) => ({
+                        ...test,
+                        field_name: contextualData?.field_name || record.filename || file?.name || 'Upload',
+                        zone_name: test.zone_name || `Zone ${index + 1}`,
+                        soil_data: normalizeSoilDataKeys(test.soil_data || {}),
+                        lab_info: test.lab_info || {},
+                        tempId: `backend_${uploadId}_${index}`,
+                        source_file_name: file?.name || undefined,
+                    }));
+                    setExtractedTests(candidates);
+                } else if (isYieldTicketDocument(family)) {
+                    const rawTickets =
+                        artifact.yield_tickets ||
+                        artifact.yieldTickets ||
+                        artifact.tickets ||
+                        [];
+                    const mapped = rawTickets.map((ticket, index) => {
+                        const ticketNumber = ticket.ticketNumber || ticket.ticket_number || ticket.number || null;
+                        const ticketDate = ticket.ticketDate || ticket.ticket_date || ticket.date || null;
+                        const netBushels =
+                            ticket.netBushels ||
+                            ticket.net_bushels ||
+                            ticket.quantityBushels ||
+                            ticket.quantity_bushels ||
+                            null;
+                        return {
+                            ...ticket,
+                            ticketNumber,
+                            ticketDate,
+                            crop: ticket.crop || ticket.crop_type || null,
+                            truckId: ticket.truckId || ticket.vehicleId || ticket.truck_id || ticket.vehicle_id || null,
+                            grossWeight: ticket.grossWeight || ticket.gross_weight || null,
+                            tareWeight: ticket.tareWeight || ticket.tare_weight || null,
+                            netWeight: ticket.netWeight || ticket.net_weight || null,
+                            moisture: ticket.moisture ?? null,
+                            testWeight: ticket.testWeight || ticket.test_weight || null,
+                            grossBushels: ticket.grossBushels || ticket.gross_bushels || null,
+                            shrink: ticket.shrink ?? null,
+                            netBushels,
+                            pricePerBushel:
+                                ticket.pricePerBushel ||
+                                ticket.price_per_bushel ||
+                                ticket.price ||
+                                null,
+                            tempId: `yield_${uploadId}_${index}`,
+                        };
+                    });
+                    setYieldTickets(mapped);
+                }
             }
         } catch (e) {
             setExtractionLoadError(e?.message || 'Failed to load record or extraction.');
@@ -257,7 +349,13 @@ export default function UploadPage() {
         const fullMode = !isAnonymousUser && isApiConfigured();
         const uploadId = backendReviewUploadId || result?.uploadId;
 
-        if (fullMode && uploadId && Array.isArray(finalizedTests) && finalizedTests.length > 0) {
+        if (
+            fullMode &&
+            uploadId &&
+            Array.isArray(finalizedTests) &&
+            finalizedTests.length > 0 &&
+            isSoilDocument(reviewFamily)
+        ) {
             setIsSaving(true);
             setSaveError(null);
             try {
@@ -266,11 +364,11 @@ export default function UploadPage() {
                     : {};
                 const res = await saveNormalizedRecords(uploadId, finalizedTests, options);
                 const count = res?.count ?? res?.saved?.length ?? finalizedTests.length;
-                toast.success(`Successfully saved ${count} soil test record(s)!`);
+                toast.success(`Successfully saved ${count} record${count !== 1 ? 's' : ''}!`);
                 navigate(createPageUrl("MyRecords"), {
                     state: {
                         refreshData: true,
-                        successMessage: `Successfully saved ${count} soil test record(s)!`
+                        successMessage: `Successfully saved ${count} record${count !== 1 ? 's' : ''}!`
                     }
                 });
                 setBackendReviewUploadId(null);
@@ -283,6 +381,20 @@ export default function UploadPage() {
             } finally {
                 setIsSaving(false);
             }
+            return;
+        }
+
+        if (fullMode && uploadId && isYieldTicketDocument(reviewFamily)) {
+            toast.success(
+                "Yield ticket data reviewed. Upload and extraction are saved. Normalized yield records will be supported in a future backend update."
+            );
+            navigate(createPageUrl("MyRecords"), {
+                state: {
+                    refreshData: true,
+                    successMessage:
+                        "Yield ticket data reviewed. Upload and extraction are saved. Normalized yield records will be supported later.",
+                },
+            });
             return;
         }
 
@@ -300,7 +412,7 @@ export default function UploadPage() {
                 navigate(createPageUrl("MyRecords"), {
                     state: {
                         refreshData: true,
-                        successMessage: `Successfully saved ${result?.count || finalizedTests?.length || 0} soil test record(s)!`
+                        successMessage: `Successfully saved ${result?.count || finalizedTests?.length || 0} record(s)!`
                     }
                 });
             }
@@ -576,7 +688,26 @@ export default function UploadPage() {
                                     <Button variant="outline" onClick={() => navigate(createPageUrl("MyRecords"))}>Back to My Records</Button>
                                 </CardContent>
                             </Card>
-                        ) : extractedTests.length > 0 ? (
+                        ) : (isYieldTicketDocument(reviewFamily) && yieldTickets.length > 0) ? (
+                            <>
+                                {saveError && (
+                                    <Alert variant="destructive" className="mb-4">
+                                        <AlertDescription>{saveError}</AlertDescription>
+                                    </Alert>
+                                )}
+                                <YieldTicketReview
+                                    tickets={yieldTickets}
+                                    onUpdateTicket={(updatedTicket) => {
+                                        setYieldTickets(prev =>
+                                            prev.map(t => t.tempId === updatedTicket.tempId ? updatedTicket : t)
+                                        );
+                                    }}
+                                    onFinalize={handleFinalizeAndAnalyze}
+                                    onCancel={() => { setBackendReviewUploadId(null); setCurrentRecord(null); resetUpload(); }}
+                                    isSaving={isSaving}
+                                />
+                            </>
+                        ) : (isSoilDocument(reviewFamily) && extractedTests.length > 0) ? (
                             <>
                                 {saveError && (
                                     <Alert variant="destructive" className="mb-4">
@@ -599,7 +730,7 @@ export default function UploadPage() {
                                 <CardContent className="py-12 text-center space-y-4">
                                     <p className="text-gray-600">
                                         {(currentRecord?.extractionStatus === 'extracted' || currentRecord?.status === 'needs_review' || currentRecord?.extractionArtifactKey)
-                                            ? 'Extraction completed but no zone-level data was extracted yet (placeholder parser). You can still save from My Records when the parser returns soil test zones.'
+                                            ? 'Extraction completed but no structured data was extracted yet for this document. You can still open this upload from My Records when richer parsing is available.'
                                             : 'Extraction has not completed yet. Check again in a moment or open this upload from My Records when it shows as ready.'}
                                     </p>
                                     <Button variant="outline" onClick={() => navigate(createPageUrl("MyRecords"))}>

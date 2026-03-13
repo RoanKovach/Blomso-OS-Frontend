@@ -135,6 +135,7 @@ export default function SoilTestsTab() {
                     (r) => r.type === 'soil_upload' || r.type === 'document_upload'
                 );
                 const normalized = (records || []).filter((r) => r.type === 'normalized_soil_test');
+                const yieldNormalized = (records || []).filter((r) => r.type === 'normalized_yield_ticket');
                 const displayTests = normalized.map((r) => ({
                     id: r.id,
                     field_name: r.field_name ?? r.zone_name ?? 'Unnamed',
@@ -153,6 +154,10 @@ export default function SoilTestsTab() {
                 setTests(displayTests);
                 setBackendRecordsMode(true);
                 setFieldsMap(new Map());
+                // Yield ticket normalized records are surfaced separately in the UI.
+                // For now we keep their raw shape and render a simplified table.
+                // eslint-disable-next-line no-unused-vars
+                const yieldRecords = yieldNormalized;
             }
         } catch (error) {
             console.error("Error in loadTests:", error);
@@ -326,6 +331,13 @@ export default function SoilTestsTab() {
             }
         }
         return cs;
+    };
+
+    const getFamilyLabel = (family) => {
+        if (!family || family === 'soil_test') return 'Soil Test';
+        if (family === 'yield_scale_ticket') return 'Yield Ticket';
+        const formatted = String(family).replace(/_/g, ' ');
+        return formatted.charAt(0).toUpperCase() + formatted.slice(1);
     };
 
     const handleExport = async () => {

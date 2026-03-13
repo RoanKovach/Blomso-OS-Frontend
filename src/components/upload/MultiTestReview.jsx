@@ -139,7 +139,7 @@ export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFi
                                 Review Extracted Data
                             </CardTitle>
                             <p className="text-green-700">
-                                The AI found {tests.length} soil test record(s). Review and edit all fields below before saving.
+                                The AI found {tests.length} record{tests.length !== 1 ? 's' : ''}. Review and edit all fields below before saving.
                             </p>
                             {hasValidationErrors && (
                                 <p className="text-amber-700 text-sm mt-2">
