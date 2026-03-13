@@ -830,6 +830,7 @@ export default function UploadPage() {
                         onContinue={isComplete ? handleContinueToReview : null}
                         canRetry={canRetry}
                         backendUploadOnly={backendUploadOnly}
+                        isDemoUser={isDemoUser || isAnonymousUser}
                     />
                 )}
 

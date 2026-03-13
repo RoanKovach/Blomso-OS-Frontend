@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Brain, CheckCircle2, AlertCircle, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
+import { User } from "@/api/entities";
 
 /**
  * Component for displaying async upload progress and results.
  * When backendUploadOnly is true, copy reflects backend reality: upload complete, extraction started (no implied AI success).
+ * When isDemoUser and error are set, shows a create-account CTA instead of a raw error so demo users are guided to sign up.
  */
 export default function AsyncUploadFlow({ 
   isProcessing, 
@@ -20,6 +22,7 @@ export default function AsyncUploadFlow({
   onContinue,
   canRetry = false,
   backendUploadOnly = false,
+  isDemoUser = false,
 }) {
   if (!isProcessing && !result && !error) {
     return null;
@@ -31,11 +34,12 @@ export default function AsyncUploadFlow({
         <CardTitle className="flex items-center gap-2 text-xl font-bold text-green-900">
           {isProcessing && <Brain className="w-6 h-6 text-green-600" />}
           {result && <CheckCircle2 className="w-6 h-6 text-green-600" />}
-          {error && <AlertCircle className="w-6 h-6 text-red-600" />}
+          {error && !isDemoUser && <AlertCircle className="w-6 h-6 text-red-600" />}
+          {error && isDemoUser && <AlertCircle className="w-6 h-6 text-amber-600" />}
           
           {isProcessing && (backendUploadOnly ? "Uploading…" : "Processing Your Soil Test")}
           {result && (backendUploadOnly ? "Upload complete" : "Processing Complete!")}
-          {error && "Processing Failed"}
+          {error && (isDemoUser ? "Create an account to continue" : "Processing Failed")}
         </CardTitle>
       </CardHeader>
       
@@ -102,24 +106,39 @@ export default function AsyncUploadFlow({
         {/* Error State */}
         {error && !isProcessing && (
           <div className="space-y-4">
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Processing Failed:</strong> {error}
-              </AlertDescription>
-            </Alert>
-            
-            {canRetry && onRetry && (
-              <div className="text-center">
-                <Button 
-                  onClick={onRetry} 
-                  variant="outline"
-                  className="flex items-center gap-2"
+            {isDemoUser ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-6 text-center space-y-4">
+                <p className="text-amber-900 font-medium">
+                  Processing requires an account. Create an account to upload and analyze documents with the full pipeline.
+                </p>
+                <Button
+                  onClick={() => User.login()}
+                  className="bg-green-600 hover:bg-green-700"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  Retry Processing
+                  Create an account
                 </Button>
               </div>
+            ) : (
+              <>
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Processing Failed:</strong> {error}
+                  </AlertDescription>
+                </Alert>
+                {canRetry && onRetry && (
+                  <div className="text-center">
+                    <Button 
+                      onClick={onRetry} 
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Retry Processing
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
