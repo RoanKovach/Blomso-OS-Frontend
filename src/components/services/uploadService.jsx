@@ -39,6 +39,13 @@ export async function* uploadFileToBackend(file, contextData = {}) {
     filename,
     contentType,
     documentFamily,
+    linkedFieldId: contextData?.linkedFieldId || null,
+    linkedFieldName: contextData?.linkedFieldName || null,
+    enteredFieldLabel:
+      contextData?.enteredFieldLabel ||
+      contextData?.field_name ||
+      null,
+    contextSnapshot: contextData || null,
   });
 
   yield {
