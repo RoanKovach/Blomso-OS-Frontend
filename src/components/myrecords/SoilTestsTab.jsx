@@ -128,9 +128,12 @@ export default function SoilTestsTab() {
                 setTests([]);
                 setBackendRecordsMode(false);
             } else {
-                // Authenticated user: GET /records (uploads + normalized_soil_test). Uploads for status table; normalized for saved tests.
+                // Authenticated user: GET /records (uploads + normalized records). Uploads for status table; normalized for saved tests.
                 const { records } = await listRecords();
-                const uploads = (records || []).filter((r) => r.type === 'soil_upload');
+                // Support both legacy soil_upload and new document_upload types.
+                const uploads = (records || []).filter(
+                    (r) => r.type === 'soil_upload' || r.type === 'document_upload'
+                );
                 const normalized = (records || []).filter((r) => r.type === 'normalized_soil_test');
                 const displayTests = normalized.map((r) => ({
                     id: r.id,
@@ -475,6 +478,7 @@ export default function SoilTestsTab() {
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Filename</TableHead>
+                                            <TableHead>Family</TableHead>
                                             <TableHead>Created</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead className="text-right">Actions</TableHead>
@@ -484,6 +488,11 @@ export default function SoilTestsTab() {
                                         {uploadRecords.map((rec) => (
                                             <TableRow key={rec.id} className="hover:bg-green-50/50">
                                                 <TableCell className="font-medium">{rec.filename || '—'}</TableCell>
+                                                <TableCell>
+                                                    {rec.documentFamily === 'yield_scale_ticket'
+                                                        ? 'Yield Ticket'
+                                                        : 'Soil Test'}
+                                                </TableCell>
                                                 <TableCell>{rec.createdAt ? formatLastUpdated(rec.createdAt) : '—'}</TableCell>
                                                 <TableCell>
                                                     <div className="flex flex-wrap gap-1 items-center">
