@@ -315,6 +315,19 @@ export default function SoilTestsTab() {
         setTestToEdit(test);
     };
 
+    const getContext = (rec) => {
+        const cs = rec?.contextSnapshot;
+        if (!cs) return null;
+        if (typeof cs === 'string') {
+            try {
+                return JSON.parse(cs);
+            } catch {
+                return null;
+            }
+        }
+        return cs;
+    };
+
     const handleExport = async () => {
         setIsExporting(true);
         try {
@@ -479,68 +492,85 @@ export default function SoilTestsTab() {
                                         <TableRow>
                                             <TableHead>Filename</TableHead>
                                             <TableHead>Family</TableHead>
+                                            <TableHead>Field</TableHead>
+                                            <TableHead>Crop</TableHead>
+                                            <TableHead>Acres</TableHead>
                                             <TableHead>Created</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {uploadRecords.map((rec) => (
-                                            <TableRow key={rec.id} className="hover:bg-green-50/50">
-                                                <TableCell className="font-medium">{rec.filename || '—'}</TableCell>
-                                                <TableCell>
-                                                    {rec.documentFamily === 'yield_scale_ticket'
-                                                        ? 'Yield Ticket'
-                                                        : 'Soil Test'}
-                                                </TableCell>
-                                                <TableCell>{rec.createdAt ? formatLastUpdated(rec.createdAt) : '—'}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-wrap gap-1 items-center">
-                                                        <Badge variant="secondary">{rec.extractionStatus ?? rec.status ?? 'uploaded'}</Badge>
-                                                        {(rec.extractionError || rec.errorMessage) && (
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent><p className="max-w-xs">{rec.extractionError || rec.errorMessage}</p></TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right space-x-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => navigate(createPageUrl("Upload"), {
-                                                            state: { backendReviewUploadId: rec.id, backendReviewFilename: rec.filename || '' }
-                                                        })}
-                                                    >
-                                                        <Eye className="w-4 h-4 mr-1" />
-                                                        Review
-                                                    </Button>
-                                                    {((rec.extractionStatus ?? rec.status) === 'extraction_failed' || (rec.extractionStatus ?? rec.status) === 'extracted' || (rec.extractionStatus ?? rec.status) === 'needs_review' || (rec.extractionStatus ?? rec.status) === 'failed') && (
+                                        {uploadRecords.map((rec) => {
+                                            const ctx = getContext(rec);
+                                            return (
+                                                <TableRow key={rec.id} className="hover:bg-green-50/50">
+                                                    <TableCell className="font-medium">{rec.filename || '—'}</TableCell>
+                                                    <TableCell>
+                                                        {rec.documentFamily === 'yield_scale_ticket'
+                                                            ? 'Yield Ticket'
+                                                            : 'Soil Test'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {rec.enteredFieldLabel || ctx?.field_name || '—'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {ctx?.intended_crop || '—'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {ctx?.field_size_acres != null
+                                                            ? ctx.field_size_acres
+                                                            : '—'}
+                                                    </TableCell>
+                                                    <TableCell>{rec.createdAt ? formatLastUpdated(rec.createdAt) : '—'}</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex flex-wrap gap-1 items-center">
+                                                            <Badge variant="secondary">{rec.extractionStatus ?? rec.status ?? 'uploaded'}</Badge>
+                                                            {(rec.extractionError || rec.errorMessage) && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent><p className="max-w-xs">{rec.extractionError || rec.errorMessage}</p></TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-right space-x-2">
                                                         <Button
-                                                            variant="ghost"
+                                                            variant="outline"
                                                             size="sm"
-                                                            disabled={extractingId === rec.id}
-                                                            onClick={async () => {
-                                                                setExtractingId(rec.id);
-                                                                try {
-                                                                    const res = await triggerExtraction(rec.id);
-                                                                    if (res?.ok) toast.success('Extraction started');
-                                                                    else toast.error('Failed to start extraction');
-                                                                } catch (_) { toast.error('Failed to start extraction'); }
-                                                                setExtractingId(null);
-                                                            }}
+                                                            onClick={() => navigate(createPageUrl("Upload"), {
+                                                                state: { backendReviewUploadId: rec.id, backendReviewFilename: rec.filename || '' }
+                                                            })}
                                                         >
-                                                            {extractingId === rec.id ? 'Starting…' : 'Re-run extraction'}
+                                                            <Eye className="w-4 h-4 mr-1" />
+                                                            Review
                                                         </Button>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                                        {((rec.extractionStatus ?? rec.status) === 'extraction_failed' || (rec.extractionStatus ?? rec.status) === 'extracted' || (rec.extractionStatus ?? rec.status) === 'needs_review' || (rec.extractionStatus ?? rec.status) === 'failed') && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                disabled={extractingId === rec.id}
+                                                                onClick={async () => {
+                                                                    setExtractingId(rec.id);
+                                                                    try {
+                                                                        const res = await triggerExtraction(rec.id);
+                                                                        if (res?.ok) toast.success('Extraction started');
+                                                                        else toast.error('Failed to start extraction');
+                                                                    } catch (_) { toast.error('Failed to start extraction'); }
+                                                                    setExtractingId(null);
+                                                                }}
+                                                            >
+                                                                {extractingId === rec.id ? 'Starting…' : 'Re-run extraction'}
+                                                            </Button>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             </div>
