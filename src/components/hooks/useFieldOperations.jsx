@@ -14,12 +14,12 @@ export const useFieldOperations = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Function to fetch or refresh the list of fields
+  // Function to fetch or refresh the list of fields (GET /fields returns { ok: true, fields: [...] })
   const refetch = useCallback(async () => {
     setIsLoading(true);
     try {
-      const raw = await Field.list('-created_date'); // Fetch all fields, newest first
-      const list = Array.isArray(raw) ? raw : (raw?.items ?? raw?.fields ?? raw?.data ?? []);
+      const raw = await Field.list('-created_date'); // Uses auth token from client.js
+      const list = Array.isArray(raw) ? raw : (raw?.fields ?? raw?.items ?? raw?.data ?? []);
       setFields(list);
       setError(null);
     } catch (e) {

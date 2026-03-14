@@ -29,9 +29,17 @@ L.Icon.Default.mergeOptions({
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
-// Mapbox tile layer configuration
-const MAPBOX_SATELLITE_URL = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
+// Mapbox tile layer (when token is set)
+const MAPBOX_SATELLITE_URL = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN || ''}`;
 const MAPBOX_ATTRIBUTION = '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+// Fallback when Mapbox token is missing so draw/save remains usable
+const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+const hasMapboxToken = Boolean(MAPBOX_TOKEN && MAPBOX_TOKEN !== 'undefined');
+const TILE_URL = hasMapboxToken ? MAPBOX_SATELLITE_URL : OSM_TILE_URL;
+const TILE_ATTRIBUTION = hasMapboxToken ? MAPBOX_ATTRIBUTION : OSM_ATTRIBUTION;
 
 // Component to handle field highlighting
 function FieldHighlighter({ fieldToHighlight, fields, onHighlightComplete, map }) {
@@ -390,13 +398,12 @@ function FieldVisualizationContent() {
           className="z-0"
           ref={mapRef}
         >
-          {/* Mapbox Satellite Tiles */}
+          {/* Tiles: Mapbox when token set, else OSM so map stays usable for draw/save */}
           <TileLayer
-            url={MAPBOX_SATELLITE_URL}
-            attribution={MAPBOX_ATTRIBUTION}
-            maxZoom={22}
-            tileSize={512}
-            zoomOffset={-1}
+            url={TILE_URL}
+            attribution={TILE_ATTRIBUTION}
+            maxZoom={hasMapboxToken ? 22 : 19}
+            {...(hasMapboxToken ? { tileSize: 512, zoomOffset: -1 } : {})}
           />
 
           {/* Map Event Handler */}
