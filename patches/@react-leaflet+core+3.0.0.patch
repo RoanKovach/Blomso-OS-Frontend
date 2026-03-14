@@ -1,0 +1,32 @@
+diff --git a/node_modules/@react-leaflet/core/lib/component.js b/node_modules/@react-leaflet/core/lib/component.js
+index d1cc750..8fea344 100644
+--- a/node_modules/@react-leaflet/core/lib/component.js
++++ b/node_modules/@react-leaflet/core/lib/component.js
+@@ -6,7 +6,7 @@ export function createContainerComponent(useElement) {
+         const { instance, context } = useElement(props).current;
+         useImperativeHandle(forwardedRef, ()=>instance);
+         const { children } = props;
+-        return children == null ? null : /*#__PURE__*/ React.createElement(LeafletContext, {
++        return children == null ? null : /*#__PURE__*/ React.createElement(LeafletContext.Provider, {
+             value: context
+         }, children);
+     }
+diff --git a/node_modules/@react-leaflet/core/lib/context.js b/node_modules/@react-leaflet/core/lib/context.js
+index 9fc6a2c..f117994 100644
+--- a/node_modules/@react-leaflet/core/lib/context.js
++++ b/node_modules/@react-leaflet/core/lib/context.js
+@@ -1,4 +1,4 @@
+-import { createContext, use } from 'react';
++import { createContext, useContext } from 'react';
+ export const CONTEXT_VERSION = 1;
+ export function createLeafletContext(map) {
+     return Object.freeze({
+@@ -14,7 +14,7 @@ export function extendContext(source, extra) {
+ }
+ export const LeafletContext = createContext(null);
+ export function useLeafletContext() {
+-    const context = use(LeafletContext);
++    const context = useContext(LeafletContext);
+     if (context == null) {
+         throw new Error('No context provided: useLeafletContext() can only be used in a descendant of <MapContainer>');
+     }
