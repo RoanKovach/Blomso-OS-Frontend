@@ -295,19 +295,23 @@ export default function UploadPage() {
                             ctx = rawCtx;
                         }
                     }
+                    const linkedFieldId = record.linkedFieldId ?? ctx?.linkedFieldId ?? null;
+                    const linkedFieldName = record.linkedFieldName ?? ctx?.linkedFieldName ?? null;
                     const fieldLabel =
                         record.enteredFieldLabel ||
                         ctx?.field_name ||
                         record.filename ||
                         filename ||
                         'Upload';
+                    const primaryFieldName = linkedFieldName || fieldLabel;
                     const cropFallback = ctx?.intended_crop || null;
                     const soilTypeFallback = ctx?.soil_type || null;
 
                     if (isSoilDocument(family)) {
                         const candidates = (artifact.soil_tests || []).map((test, index) => ({
                             ...test,
-                            field_name: test.field_name || fieldLabel,
+                            field_name: primaryFieldName || test.field_name || fieldLabel,
+                            field_id: linkedFieldId ?? test.field_id ?? null,
                             zone_name: test.zone_name || `Zone ${index + 1}`,
                             soil_data: normalizeSoilDataKeys(test.soil_data || {}),
                             lab_info: test.lab_info || {},
@@ -330,6 +334,7 @@ export default function UploadPage() {
                             const defaults = {
                                 cropFallback,
                                 fieldLabel:
+                                    primaryFieldName ||
                                     ticket.fieldLabel ||
                                     record.enteredFieldLabel ||
                                     ctx?.field_name ||
@@ -340,6 +345,8 @@ export default function UploadPage() {
                             const normalized = normalizeYieldTicket(ticket, defaults);
                             return {
                                 ...normalized,
+                                field_id: linkedFieldId ?? normalized.field_id ?? null,
+                                field_name: primaryFieldName || normalized.field_name || normalized.fieldLabel,
                                 tempId: `yield_${uploadId}_${index}`,
                             };
                         });
@@ -461,6 +468,8 @@ export default function UploadPage() {
                         ctx = rawCtx;
                     }
                 }
+                const linkedFieldId = record.linkedFieldId ?? ctx?.linkedFieldId ?? null;
+                const linkedFieldName = record.linkedFieldName ?? ctx?.linkedFieldName ?? null;
                 const fieldLabel =
                     contextualData?.enteredFieldLabel ||
                     contextualData?.field_name ||
@@ -469,6 +478,7 @@ export default function UploadPage() {
                     record.filename ||
                     file?.name ||
                     'Upload';
+                const primaryFieldName = linkedFieldName || fieldLabel;
                 const cropFallback =
                     contextualData?.intended_crop ||
                     ctx?.intended_crop ||
@@ -481,7 +491,8 @@ export default function UploadPage() {
                 if (isSoilDocument(family)) {
                     const candidates = (artifact.soil_tests || []).map((test, index) => ({
                         ...test,
-                        field_name: test.field_name || fieldLabel,
+                        field_name: primaryFieldName || test.field_name || fieldLabel,
+                        field_id: linkedFieldId ?? test.field_id ?? null,
                         zone_name: test.zone_name || `Zone ${index + 1}`,
                         soil_data: normalizeSoilDataKeys(test.soil_data || {}),
                         lab_info: test.lab_info || {},
@@ -504,6 +515,7 @@ export default function UploadPage() {
                         const defaults = {
                             cropFallback,
                             fieldLabel:
+                                primaryFieldName ||
                                 ticket.fieldLabel ||
                                 contextualData?.enteredFieldLabel ||
                                 contextualData?.field_name ||
@@ -516,6 +528,8 @@ export default function UploadPage() {
                         const normalized = normalizeYieldTicket(ticket, defaults);
                         return {
                             ...normalized,
+                            field_id: linkedFieldId ?? normalized.field_id ?? null,
+                            field_name: primaryFieldName || normalized.field_name || normalized.fieldLabel,
                             tempId: `yield_${uploadId}_${index}`,
                         };
                     });
@@ -892,19 +906,23 @@ export default function UploadPage() {
                                                         ctx = rawCtx;
                                                     }
                                                 }
+                                                const linkedFieldId = record.linkedFieldId ?? ctx?.linkedFieldId ?? null;
+                                                const linkedFieldName = record.linkedFieldName ?? ctx?.linkedFieldName ?? null;
                                                 const fieldLabel =
                                                     record.enteredFieldLabel ||
                                                     ctx?.field_name ||
                                                     record.filename ||
                                                     filename ||
                                                     'Upload';
+                                                const primaryFieldName = linkedFieldName || fieldLabel;
                                                 const cropFallback = ctx?.intended_crop || null;
                                                 const soilTypeFallback = ctx?.soil_type || null;
 
                                                 if (isSoilDocument(family)) {
                                                     const candidates = (artifact.soil_tests || []).map((test, index) => ({
                                                         ...test,
-                                                        field_name: test.field_name || fieldLabel,
+                                                        field_name: primaryFieldName || test.field_name || fieldLabel,
+                                                        field_id: linkedFieldId ?? test.field_id ?? null,
                                                         zone_name: test.zone_name || `Zone ${index + 1}`,
                                                         soil_data: normalizeSoilDataKeys(test.soil_data || {}),
                                                         lab_info: test.lab_info || {},
@@ -928,6 +946,7 @@ export default function UploadPage() {
                                                         const defaults = {
                                                             cropFallback,
                                                             fieldLabel:
+                                                                primaryFieldName ||
                                                                 ticket.fieldLabel ||
                                                                 record.enteredFieldLabel ||
                                                                 ctx?.field_name ||
@@ -938,6 +957,8 @@ export default function UploadPage() {
                                                         const normalized = normalizeYieldTicket(ticket, defaults);
                                                         return {
                                                             ...normalized,
+                                                            field_id: linkedFieldId ?? normalized.field_id ?? null,
+                                                            field_name: primaryFieldName || normalized.field_name || normalized.fieldLabel,
                                                             tempId: `yield_${backendReviewUploadId}_${index}`,
                                                         };
                                                     });
