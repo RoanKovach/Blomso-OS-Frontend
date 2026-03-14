@@ -20,6 +20,7 @@ import YieldTicketReview from "../components/upload/YieldTicketReview";
 import BatchUploadModal from "../components/upload/BatchUploadModal";
 import AsyncUploadFlow from "../components/upload/AsyncUploadFlow";
 import { useUploadAndParse, normalizeSoilDataKeys } from "../components/hooks/useUploadAndParse";
+import { useFieldOperations } from "../components/hooks/useFieldOperations";
 import { useTracking } from '@/components/analytics/useTracking';
 import { saveNormalizedRecords, getRecord } from "@/api/records";
 import { getExtraction } from "@/api/extraction";
@@ -43,6 +44,9 @@ export default function UploadPage() {
     const [tokenInput, setTokenInput] = useState('');
 
     const { trackFileUpload } = useTracking();
+
+    const { fields: registryFields } = useFieldOperations();
+    const canonicalFields = (isDemoUser || isAnonymousUser) ? [] : (Array.isArray(registryFields) ? registryFields : []);
 
     // Use the new upload hook
     const {
@@ -815,6 +819,7 @@ export default function UploadPage() {
                     <ContextualForm
                         onSubmit={handleContextualSubmit}
                         onBack={() => setCurrentStep(1)}
+                        canonicalFields={canonicalFields}
                     />
                 )}
 

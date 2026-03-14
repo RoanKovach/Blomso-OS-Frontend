@@ -17,7 +17,7 @@ const FARMING_METHODS = [
   "Conventional", "Organic", "No-Till", "Regenerative", "Strip-Till", "Minimum Till", "Other"
 ];
 
-export default function ContextualForm({ onSubmit, onBack, isBatchMode = false, fileCount = 1 }) {
+export default function ContextualForm({ onSubmit, onBack, isBatchMode = false, fileCount = 1, canonicalFields = [] }) {
   const [formData, setFormData] = useState({
     field_name: '',
     field_size_acres: '',
@@ -33,6 +33,10 @@ export default function ContextualForm({ onSubmit, onBack, isBatchMode = false, 
     },
     field_notes: ''
   });
+
+  /** Optional link to a canonical field from GET /fields (signed-in registry) */
+  const [linkedFieldId, setLinkedFieldId] = useState(null);
+  const [linkedFieldName, setLinkedFieldName] = useState(null);
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,7 +101,12 @@ export default function ContextualForm({ onSubmit, onBack, isBatchMode = false, 
     
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
-      onSubmit(formData);
+      onSubmit({
+        ...formData,
+        linkedFieldId: linkedFieldId || null,
+        linkedFieldName: linkedFieldName || null,
+        enteredFieldLabel: formData.field_name.trim() || null,
+      });
     } catch (error) {
       console.error("Error submitting form:", error);
     } finally {
@@ -158,6 +167,44 @@ export default function ContextualForm({ onSubmit, onBack, isBatchMode = false, 
 
           {/* Basic Field Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {!isBatchMode && canonicalFields.length > 0 && (
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-sm font-medium text-green-900">
+                  Link to field (optional)
+                </Label>
+                <Select
+                  value={linkedFieldId || 'none'}
+                  onValueChange={(value) => {
+                    if (value === 'none') {
+                      setLinkedFieldId(null);
+                      setLinkedFieldName(null);
+                    } else {
+                      const field = canonicalFields.find((f) => f.id === value);
+                      if (field) {
+                        setLinkedFieldId(field.id);
+                        const name = field.field_name ?? field.name ?? field.fieldName ?? '';
+                        setLinkedFieldName(name);
+                        if (!formData.field_name.trim()) {
+                          setFormData((prev) => ({ ...prev, field_name: name }));
+                        }
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="None – use free text below" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None – use free text below</SelectItem>
+                    {canonicalFields.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.field_name ?? f.name ?? f.fieldName ?? f.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="field_name" className="text-sm font-medium text-green-900">
                 {isBatchMode ? 'Batch Field Name' : 'Field Name or ID'} <span className="text-red-500">*</span>
