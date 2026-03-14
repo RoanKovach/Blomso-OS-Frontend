@@ -136,6 +136,7 @@ function FieldVisualizationContent() {
 
   const handleFieldSelect = useCallback((field) => {
     setSelectedField(field);
+    setFieldToHighlight(field?.id ?? null);
     trackUserAction('field_selected', { field_id: field.id });
   }, [trackUserAction]);
 

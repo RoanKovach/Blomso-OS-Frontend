@@ -156,7 +156,13 @@ export default function SoilTestsTab() {
                 setTests(displayTests);
                 setYieldRecords(yieldNormalized || []);
                 setBackendRecordsMode(true);
-                setFieldsMap(new Map());
+                try {
+                    const raw = await Field.list();
+                    const fieldList = Array.isArray(raw) ? raw : (raw?.fields ?? raw?.items ?? raw?.data ?? []);
+                    setFieldsMap(new Map((fieldList || []).map((f) => [f.id, f.field_name ?? f.name ?? f.fieldName ?? f.id])));
+                } catch (_) {
+                    setFieldsMap(new Map());
+                }
             }
         } catch (error) {
             console.error("Error in loadTests:", error);
@@ -169,6 +175,31 @@ export default function SoilTestsTab() {
     useEffect(() => {
         loadTests();
     }, [loadTests]);
+
+    const NON_TERMINAL_STATUSES = ['uploaded', 'extracting', 'processing', 'needs_review'];
+    const hasNonTerminalUploads = useMemo(() => {
+        if (!backendRecordsMode || !uploadRecords.length) return false;
+        return uploadRecords.some((rec) => {
+            const status = rec.extractionStatus ?? rec.status ?? 'uploaded';
+            const hasSaved = tests.some((t) => t.sourceUploadId === rec.id);
+            return (NON_TERMINAL_STATUSES.includes(status) || (status === 'needs_review' && !hasSaved));
+        });
+    }, [backendRecordsMode, uploadRecords, tests]);
+
+    useEffect(() => {
+        if (!hasNonTerminalUploads) return;
+        const POLL_INTERVAL_MS = 10000;
+        const MAX_POLL_MS = 5 * 60 * 1000;
+        const startedAt = Date.now();
+        const intervalId = setInterval(() => {
+            loadTests();
+        }, POLL_INTERVAL_MS);
+        const timeoutId = setTimeout(() => clearInterval(intervalId), MAX_POLL_MS);
+        return () => {
+            clearInterval(intervalId);
+            clearTimeout(timeoutId);
+        };
+    }, [hasNonTerminalUploads, loadTests]);
 
     // This effect handles refresh for AUTHENTICATED users only.
     useEffect(() => {
@@ -349,8 +380,8 @@ export default function SoilTestsTab() {
             const upload = test.sourceUploadId ? sourceUploadMap.get(test.sourceUploadId) : null;
             const ctx = upload ? getContext(upload) : null;
             const displayFieldName =
-                test.field_name ||
                 upload?.linkedFieldName ||
+                test.field_name ||
                 upload?.enteredFieldLabel ||
                 ctx?.field_name ||
                 upload?.filename ||
@@ -560,7 +591,7 @@ export default function SoilTestsTab() {
                                                             : 'Soil Test'}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {rec.enteredFieldLabel || ctx?.field_name || '—'}
+                                                        {rec.linkedFieldName || rec.enteredFieldLabel || ctx?.field_name || '—'}
                                                     </TableCell>
                                                     <TableCell>
                                                         {ctx?.intended_crop || '—'}
@@ -731,8 +762,9 @@ export default function SoilTestsTab() {
                                             </TableHeader>
                                             <TableBody>
                                                 {yieldRecords.map((rec) => {
+                                                    const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
                                                     const ticketNumber = rec.ticket_number ?? rec.ticketNumber ?? '—';
-                                                    const fieldName = rec.field_name ?? '—';
+                                                    const fieldName = upload?.linkedFieldName || rec.field_name || '—';
                                                     const cropRaw = rec.crop ?? rec.crop_type ?? '—';
                                                     const crop = cropRaw && cropRaw !== '—'
                                                         ? cropRaw.charAt(0).toUpperCase() + cropRaw.slice(1).toLowerCase()

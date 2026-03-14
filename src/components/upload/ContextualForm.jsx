@@ -184,9 +184,13 @@ export default function ContextualForm({ onSubmit, onBack, isBatchMode = false, 
                         setLinkedFieldId(field.id);
                         const name = field.field_name ?? field.name ?? field.fieldName ?? '';
                         setLinkedFieldName(name);
-                        if (!formData.field_name.trim()) {
-                          setFormData((prev) => ({ ...prev, field_name: name }));
-                        }
+                        const acres = field.acres ?? field.field_size_acres ?? field.size ?? null;
+                        const numAcres = acres != null ? Number(acres) : null;
+                        setFormData((prev) => ({
+                          ...prev,
+                          field_name: name,
+                          ...(numAcres != null && !isNaN(numAcres) ? { field_size_acres: numAcres } : {}),
+                        }));
                       }
                     }
                   }}
