@@ -1,49 +1,54 @@
-import { toast } from 'sonner';
+import { toast as sonnerToast } from 'sonner';
+
+const noopToast = Object.assign(() => {}, {
+  success: () => {},
+  error: () => {},
+  info: () => {},
+  warning: () => {},
+  loading: () => () => {},
+  dismiss: () => {},
+});
+const safeToast =
+  sonnerToast && (typeof sonnerToast === 'function' || typeof sonnerToast.success === 'function')
+    ? sonnerToast
+    : noopToast;
 
 /**
  * Enhanced hook for consistent toast notifications with field-specific messages
  */
 export const useToasts = () => {
+  const toast = safeToast;
   const notifySuccess = (message, options = {}) => {
-    toast.success(message, {
-      duration: 4000,
-      ...options
-    });
+    if (typeof toast.success === 'function') toast.success(message, { duration: 4000, ...options });
   };
 
   const notifyError = (error, options = {}) => {
     const message = error instanceof Error ? error.message : error;
-    toast.error(message, {
+    if (typeof toast.error === 'function') toast.error(message, {
       duration: 6000,
       ...options
     });
   };
 
   const notifyInfo = (message, options = {}) => {
-    toast.info(message, {
-      duration: 4000,
-      ...options
-    });
+    if (typeof toast.info === 'function') toast.info(message, { duration: 4000, ...options });
   };
 
   const notifyWarning = (message, options = {}) => {
-    toast.warning(message, {
-      duration: 5000,
-      ...options
-    });
+    if (typeof toast.warning === 'function') toast.warning(message, { duration: 5000, ...options });
   };
 
   const notifyLoading = (message, options = {}) => {
-    return toast.loading(message, options);
+    return typeof toast.loading === 'function' ? toast.loading(message, options) : () => {};
   };
 
   const dismiss = (toastId) => {
-    toast.dismiss(toastId);
+    if (typeof toast.dismiss === 'function') toast.dismiss(toastId);
   };
 
   // Field-specific toast helpers
   const notifyFieldCreated = (fieldName) => {
-    toast.success(`Field "${fieldName}" created successfully!`, {
+    if (typeof toast.success === 'function') toast.success(`Field "${fieldName}" created successfully!`, {
       duration: 4000,
       action: {
         label: 'View',
@@ -59,8 +64,7 @@ export const useToasts = () => {
     } else if (error?.message) {
       message = error.message;
     }
-    
-    toast.error(message, {
+    if (typeof toast.error === 'function') toast.error(message, {
       duration: 6000,
       description: 'Please try again or contact support if the issue persists'
     });

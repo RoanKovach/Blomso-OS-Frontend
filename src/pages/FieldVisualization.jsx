@@ -112,7 +112,8 @@ function FieldVisualizationContent() {
   // Search and field management
   const [searchTerm, setSearchTerm] = useState('');
   const { fields, isLoading, error, createField, deleteField, refetch, isCreating } = useFieldOperations();
-  const { searchResults: searchedFields } = useFieldSearch(fields, searchTerm);
+  const fieldsList = Array.isArray(fields) ? fields : [];
+  const { searchResults: searchedFields } = useFieldSearch(fieldsList, searchTerm);
 
   // Tracking and notifications
   const { trackFieldCreation, trackUserAction, trackError } = useTracking();
@@ -137,8 +138,8 @@ function FieldVisualizationContent() {
     const params = new URLSearchParams(location.search);
     const fieldIdToSelect = params.get('fieldId') || params.get('field_id');
 
-    if (fieldIdToSelect && fields.length > 0 && !isLoading) {
-      const field = fields.find(f => f.id === fieldIdToSelect);
+    if (fieldIdToSelect && fieldsList.length > 0 && !isLoading) {
+      const field = fieldsList.find(f => f.id === fieldIdToSelect);
       if (field) {
         handleFieldSelect(field);
         setFieldToHighlight(fieldIdToSelect);
@@ -150,7 +151,7 @@ function FieldVisualizationContent() {
     } else if (!fieldIdToSelect) {
       setHasProcessedDeepLink(true);
     }
-  }, [location.search, fields, isLoading, handleFieldSelect, toast, trackUserAction, hasProcessedDeepLink]);
+  }, [location.search, fieldsList, isLoading, handleFieldSelect, toast, trackUserAction, hasProcessedDeepLink]);
 
   useEffect(() => {
     setHasProcessedDeepLink(false);
@@ -158,14 +159,14 @@ function FieldVisualizationContent() {
 
   // Auto-center on first field
   useEffect(() => {
-    if (!isLoading && fields.length > 0 && center[0] === 40.0 && !fieldToHighlight) {
-      const fieldWithCenter = fields.find(f => f.center_point);
+    if (!isLoading && fieldsList.length > 0 && center[0] === 40.0 && !fieldToHighlight) {
+      const fieldWithCenter = fieldsList.find(f => f.center_point);
       if (fieldWithCenter) {
         setCenter([fieldWithCenter.center_point.latitude, fieldWithCenter.center_point.longitude]);
         setZoom(12);
       }
     }
-  }, [fields, isLoading, center, fieldToHighlight]);
+  }, [fieldsList, isLoading, center, fieldToHighlight]);
 
   const handleModeChange = (newMode) => {
     if (newMode === 'view' && mode === 'draw') {
@@ -388,7 +389,6 @@ function FieldVisualizationContent() {
           style={{ height: "100vh", width: "100%" }}
           className="z-0"
           ref={mapRef}
-          whenCreated={(map) => { mapRef.current = map; }}
         >
           {/* Mapbox Satellite Tiles */}
           <TileLayer
@@ -408,7 +408,7 @@ function FieldVisualizationContent() {
           />
 
           {/* Field Polygons */}
-          {fields.filter(field => field.geometry).map(field => (
+          {fieldsList.filter(field => field.geometry).map(field => (
             <GeoJSON
               key={field.id}
               data={field.geometry}
@@ -474,7 +474,7 @@ function FieldVisualizationContent() {
 
         <FieldHighlighter
           fieldToHighlight={fieldToHighlight}
-          fields={fields}
+          fields={fieldsList}
           onHighlightComplete={handleHighlightComplete}
           map={mapRef.current}
         />
