@@ -591,7 +591,7 @@ export default function SoilTestsTab() {
                                                             : 'Soil Test'}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {rec.linkedFieldName || rec.enteredFieldLabel || ctx?.field_name || '—'}
+                                                        {rec.linkedFieldName || rec.field_name || rec.enteredFieldLabel || ctx?.field_name || '—'}
                                                     </TableCell>
                                                     <TableCell>
                                                         {ctx?.intended_crop || '—'}
@@ -764,7 +764,7 @@ export default function SoilTestsTab() {
                                                 {yieldRecords.map((rec) => {
                                                     const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
                                                     const ticketNumber = rec.ticket_number ?? rec.ticketNumber ?? '—';
-                                                    const fieldName = upload?.linkedFieldName || rec.field_name || '—';
+                                                    const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || '—';
                                                     const cropRaw = rec.crop ?? rec.crop_type ?? '—';
                                                     const crop = cropRaw && cropRaw !== '—'
                                                         ? cropRaw.charAt(0).toUpperCase() + cropRaw.slice(1).toLowerCase()

@@ -30,7 +30,7 @@ const EditableField = ({ id, label, value, onChange, error, isBlank, type = "num
     </div>
 );
 
-export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFinalize, onCancel, apiErrors = {}, isSaving = false }) {
+export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFinalize, onCancel, apiErrors = {}, isSaving = false, linkedFieldName = null, extractedZoneFieldSummary = null }) {
     const [validationErrors, setValidationErrors] = useState({});
     
     // All soil data fields that should be displayed
@@ -141,6 +141,16 @@ export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFi
                             <p className="text-green-700">
                                 The AI found {tests.length} record{tests.length !== 1 ? 's' : ''}. Review and edit all fields below before saving.
                             </p>
+                            {(linkedFieldName || extractedZoneFieldSummary) && (
+                                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-900 space-y-1">
+                                    {linkedFieldName && (
+                                        <p><strong>Linked Field:</strong> {linkedFieldName}</p>
+                                    )}
+                                    {extractedZoneFieldSummary && (
+                                        <p className="text-green-800"><strong>Extracted Zone/Field:</strong> {extractedZoneFieldSummary}</p>
+                                    )}
+                                </div>
+                            )}
                             {hasValidationErrors && (
                                 <p className="text-amber-700 text-sm mt-2">
                                     <AlertTriangle className="inline w-4 h-4 mr-1" />

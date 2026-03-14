@@ -232,11 +232,19 @@ export default function ContextualForm({ onSubmit, onBack, isBatchMode = false, 
               <Input
                 id="field_size_acres"
                 type="number"
-                min="0.1"
-                step="0.1"
-                placeholder="e.g., 120.5"
-                value={formData.field_size_acres}
-                onChange={(e) => handleInputChange('field_size_acres', parseFloat(e.target.value))}
+                min="0.01"
+                step="0.01"
+                placeholder="e.g., 120.5 or 41.45"
+                value={formData.field_size_acres ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || v === null) {
+                    handleInputChange('field_size_acres', null);
+                    return;
+                  }
+                  const n = parseFloat(v);
+                  handleInputChange('field_size_acres', Number.isNaN(n) ? null : n);
+                }}
                 className={errors.field_size_acres ? "border-red-500" : ""}
               />
               {errors.field_size_acres && (

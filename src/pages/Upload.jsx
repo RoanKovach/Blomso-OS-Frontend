@@ -1019,6 +1019,19 @@ export default function UploadPage() {
                                     onFinalize={handleFinalizeAndAnalyze}
                                     onCancel={() => { setBackendReviewUploadId(null); setCurrentRecord(null); resetUpload(); }}
                                     isSaving={isSaving}
+                                    linkedFieldName={(() => {
+                                        const rec = currentRecord;
+                                        if (!rec) return null;
+                                        const rawCtx = rec.contextSnapshot;
+                                        let ctx = null;
+                                        if (rawCtx) {
+                                            try { ctx = typeof rawCtx === 'string' ? JSON.parse(rawCtx) : rawCtx; } catch { ctx = null; }
+                                        }
+                                        return rec.linkedFieldName ?? ctx?.linkedFieldName ?? null;
+                                    })()}
+                                    extractedZoneFieldSummary={extractedTests.length
+                                        ? [...new Set(extractedTests.map((t) => t.zone_name).filter(Boolean))].join(', ')
+                                        : null}
                                 />
                             </>
                         ) : (
