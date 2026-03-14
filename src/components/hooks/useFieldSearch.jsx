@@ -39,13 +39,14 @@ const getNestedValue = (obj, path) => {
  * Fallback implementation without Fuse.js
  */
 export const useFieldSearch = (fields = [], initialQuery = '') => {
+  const list = Array.isArray(fields) ? fields : [];
   // Persist recent search terms
   const [recentSearches, setRecentSearches] = usePersistedState('blomso_recent_searches', []);
   const [searchQuery, setSearchQuery] = usePersistedState('blomso_current_search', initialQuery);
 
   const searchResults = useMemo(() => {
     if (!searchQuery || !searchQuery.trim()) {
-      return fields;
+      return list;
     }
 
     // Define search keys
@@ -60,7 +61,7 @@ export const useFieldSearch = (fields = [], initialQuery = '') => {
     try {
       // Try to use Fuse.js if available (for future enhancement)
       if (typeof window !== 'undefined' && window.Fuse) {
-        const fuse = new window.Fuse(fields, {
+        const fuse = new window.Fuse(list, {
           keys: searchKeys.map(key => ({ name: key, weight: key === 'field_name' ? 0.7 : 0.3 })),
           threshold: 0.4,
           includeScore: true,
@@ -77,13 +78,13 @@ export const useFieldSearch = (fields = [], initialQuery = '') => {
       }
 
       // Fallback to simple search
-      return simpleSearch(fields, searchQuery, searchKeys);
+      return simpleSearch(list, searchQuery, searchKeys);
 
     } catch (error) {
       console.warn('Search error, falling back to simple search:', error);
-      return simpleSearch(fields, searchQuery, searchKeys);
+      return simpleSearch(list, searchQuery, searchKeys);
     }
-  }, [fields, searchQuery]);
+  }, [list, searchQuery]);
 
   const updateSearchQuery = useCallback((newQuery) => {
     setSearchQuery(newQuery);

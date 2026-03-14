@@ -18,8 +18,9 @@ export const useFieldOperations = () => {
   const refetch = useCallback(async () => {
     setIsLoading(true);
     try {
-      const fetchedFields = await Field.list('-created_date'); // Fetch all fields, newest first
-      setFields(fetchedFields);
+      const raw = await Field.list('-created_date'); // Fetch all fields, newest first
+      const list = Array.isArray(raw) ? raw : (raw?.items ?? raw?.fields ?? raw?.data ?? []);
+      setFields(list);
       setError(null);
     } catch (e) {
       setError(e);
