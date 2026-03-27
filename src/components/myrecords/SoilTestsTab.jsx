@@ -25,6 +25,8 @@ import EditSoilTestModal from "./EditSoilTestModal";
 import GridView from "./GridView";
 import ExpandableRow from "./ExpandableRow";
 import SavedRecordsDataSheet from "./SavedRecordsDataSheet";
+import RecordDetailDrawer from "./RecordDetailDrawer";
+import { blobFromExportSoilTestsResponse } from "./exportSoilTestsResponse";
 import { formatDateOnlySafe } from "./dateUtils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -57,6 +59,7 @@ export default function SoilTestsTab() {
     /** Signed-in Saved Records only: Standard tables vs Data Sheet modeling view */
     const [savedRecordsViewMode, setSavedRecordsViewMode] = useState("standard");
     const savedRecordsDataSheetRef = useRef(null);
+    const [recordDetail, setRecordDetail] = useState(null);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -557,6 +560,34 @@ export default function SoilTestsTab() {
         return [...soilRows, ...yieldRows];
     }, [backendRecordsMode, filteredSavedSoil, filteredSavedYield, getSavedSoilDisplay, sourceUploadMap]);
 
+    const openSoilView = useCallback(
+        (test) => {
+            if (backendRecordsMode) {
+                setRecordDetail({ kind: "soil", record: test });
+            } else {
+                navigate(createPageUrl(`Recommendations?test_id=${test.id}`));
+            }
+        },
+        [backendRecordsMode, navigate]
+    );
+
+    const openYieldView = useCallback((rec) => {
+        setRecordDetail({ kind: "yield", record: rec });
+    }, []);
+
+    const openFromDataSheetRow = useCallback(
+        (row) => {
+            if (row.family === "Soil Test") {
+                const t = filteredSavedSoil.find((x) => x.id === row.id);
+                if (t) setRecordDetail({ kind: "soil", record: t });
+            } else {
+                const y = filteredSavedYield.find((x) => x.id === row.id);
+                if (y) setRecordDetail({ kind: "yield", record: y });
+            }
+        },
+        [filteredSavedSoil, filteredSavedYield]
+    );
+
     const handleExport = async () => {
         if (backendRecordsMode && savedRecordsViewMode === "datasheet" && savedRecordsDataSheetRef.current) {
             setIsExporting(true);
@@ -569,27 +600,23 @@ export default function SoilTestsTab() {
         }
         setIsExporting(true);
         try {
-            const response = await exportSoilTests();
-            
-            if (response.status === 200) {
-                const blob = new Blob([response.data], { type: 'text/csv' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `soiltests-export-${new Date().toISOString().split('T')[0]}.csv`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-                toast.success("Export complete – downloading file...");
-            } else {
-                throw new Error(`Export failed with status ${response.status}`);
-            }
+            const body = await exportSoilTests();
+            const blob = blobFromExportSoilTestsResponse(body);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `soiltests-export-${new Date().toISOString().split("T")[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            toast.success("Export complete – downloading file...");
         } catch (error) {
             console.error("Failed to export data:", error);
-            toast.error(`Failed to export data: ${error.message || 'Unknown error'}`);
+            toast.error(`Failed to export data: ${error.message || "Unknown error"}`);
+        } finally {
+            setIsExporting(false);
         }
-        setIsExporting(false);
     };
 
     const toggleRowExpansion = (testId) => {
@@ -902,7 +929,11 @@ export default function SoilTestsTab() {
                                         Data Sheet is optimized for desktop. Switch to Standard or use a wider screen for the full spreadsheet.
                                     </div>
                                     <div className="hidden md:block">
-                                        <SavedRecordsDataSheet ref={savedRecordsDataSheetRef} rows={dataSheetRows} />
+                                        <SavedRecordsDataSheet
+                                            ref={savedRecordsDataSheetRef}
+                                            rows={dataSheetRows}
+                                            onViewRecord={openFromDataSheetRow}
+                                        />
                                     </div>
                                 </>
                             ) : (
@@ -960,7 +991,7 @@ export default function SoilTestsTab() {
                                                                 <TableCell><Badge>{test.soil_health_index || 'N/A'}</Badge></TableCell>
                                                                 <TableCell>{formatLastUpdated(test.updated_date)}</TableCell>
                                                                 <TableCell className="space-x-2">
-                                                                    <Button variant="ghost" size="icon" onClick={() => navigate(createPageUrl(`Recommendations?test_id=${test.id}`))}><Eye className="w-4 h-4" /></Button>
+                                                                    <Button variant="ghost" size="icon" onClick={() => openSoilView(test)}><Eye className="w-4 h-4" /></Button>
                                                                     <Button variant="ghost" size="icon" onClick={() => setTestToEdit(test)}><Edit className="w-4 h-4" /></Button>
                                                                     <Button variant="ghost" size="icon" onClick={() => setTestToDelete(test)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                                                                 </TableCell>
@@ -1044,8 +1075,8 @@ export default function SoilTestsTab() {
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"
-                                                                    disabled
-                                                                    title="Create an account to view yield ticket details"
+                                                                    onClick={() => openYieldView(rec)}
+                                                                    aria-label="View yield ticket details"
                                                                 >
                                                                     <Eye className="w-4 h-4" />
                                                                 </Button>
@@ -1144,7 +1175,7 @@ export default function SoilTestsTab() {
                                                         <TableCell><Badge>{test.soil_health_index || 'N/A'}</Badge></TableCell>
                                                         <TableCell>{formatLastUpdated(test.updated_date)}</TableCell>
                                                         <TableCell className="space-x-2">
-                                                            <Button variant="ghost" size="icon" onClick={() => navigate(createPageUrl(`Recommendations?test_id=${test.id}`))}>
+                                                            <Button variant="ghost" size="icon" onClick={() => openSoilView(test)}>
                                                                 <Eye className="w-4 h-4" />
                                                             </Button>
                                                             <Button variant="ghost" size="icon" onClick={() => setTestToEdit(test)}>
@@ -1223,7 +1254,7 @@ export default function SoilTestsTab() {
                                                         <span className="truncate">Map</span>
                                                     </Button>
                                                 )}
-                                                <Button variant="outline" size="sm" onClick={() => navigate(createPageUrl(`Recommendations?test_id=${test.id}`))} className="flex-1 min-w-0">
+                                                <Button variant="outline" size="sm" onClick={() => openSoilView(test)} className="flex-1 min-w-0">
                                                     <Eye className="w-3 h-3 mr-1" /> 
                                                     <span className="truncate">View</span>
                                                 </Button>
@@ -1254,6 +1285,18 @@ export default function SoilTestsTab() {
                     </TabsContent>
                 </Tabs>
             )}
+
+            <RecordDetailDrawer
+                open={!!recordDetail}
+                onOpenChange={(v) => {
+                    if (!v) setRecordDetail(null);
+                }}
+                detail={recordDetail}
+                fieldsMap={fieldsMap}
+                sourceUploadMap={sourceUploadMap}
+                getSavedSoilDisplay={getSavedSoilDisplay}
+                formatLastUpdated={formatLastUpdated}
+            />
 
             <ConfirmationModal
                 isOpen={!!testToDelete}
