@@ -25,11 +25,7 @@ import EditSoilTestModal from "./EditSoilTestModal";
 import GridView from "./GridView";
 import ExpandableRow from "./ExpandableRow";
 import SavedRecordsDataSheet from "./SavedRecordsDataSheet";
-import {
-    ROW_MODEL_RECORD_LEDGER,
-    ROW_MODEL_SOIL_TESTS,
-    ROW_MODEL_YIELD_TICKETS,
-} from "./dataSheetConfig";
+import { SHEET_SOIL, SHEET_YIELD, SHEET_FIELDS, DEFAULT_SHEET_TYPE } from "./dataSheetConfig";
 import RecordDetailDrawer from "./RecordDetailDrawer";
 import { blobFromExportSoilTestsResponse } from "./exportSoilTestsResponse";
 import { formatDateOnlySafe } from "./dateUtils";
@@ -39,6 +35,8 @@ export default function SoilTestsTab() {
     const [tests, setTests] = useState([]);
     const [yieldRecords, setYieldRecords] = useState([]);
     const [fieldsMap, setFieldsMap] = useState(new Map()); // State for Field ID -> Name mapping
+    /** Field id -> acres when Field.list() provides it */
+    const [fieldAcresMap, setFieldAcresMap] = useState(new Map());
     const [isLoading, setIsLoading] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
@@ -63,8 +61,8 @@ export default function SoilTestsTab() {
     });
     /** Signed-in Saved Records only: Standard tables vs Data Sheet modeling view */
     const [savedRecordsViewMode, setSavedRecordsViewMode] = useState("standard");
-    /** Data Sheet: what one row means (ledger vs family-specific projection) */
-    const [dataSheetRowModel, setDataSheetRowModel] = useState(ROW_MODEL_RECORD_LEDGER);
+    /** Data Sheet: soil tests | yield tickets | field summary (one grain per sheet) */
+    const [dataSheetType, setDataSheetType] = useState(DEFAULT_SHEET_TYPE);
     const savedRecordsDataSheetRef = useRef(null);
     const [recordDetail, setRecordDetail] = useState(null);
     const navigate = useNavigate();
@@ -180,9 +178,19 @@ export default function SoilTestsTab() {
                 try {
                     const raw = await Field.list();
                     const fieldList = Array.isArray(raw) ? raw : (raw?.fields ?? raw?.items ?? raw?.data ?? []);
-                    setFieldsMap(new Map((fieldList || []).map((f) => [f.id, f.field_name ?? f.name ?? f.fieldName ?? f.id])));
+                    const list = fieldList || [];
+                    setFieldsMap(new Map(list.map((f) => [f.id, f.field_name ?? f.name ?? f.fieldName ?? f.id])));
+                    setFieldAcresMap(
+                        new Map(
+                            list.map((f) => [
+                                f.id,
+                                f.acres ?? f.field_size_acres ?? f.fieldSizeAcres ?? f.field_acres ?? null,
+                            ])
+                        )
+                    );
                 } catch (_) {
                     setFieldsMap(new Map());
+                    setFieldAcresMap(new Map());
                 }
             }
         } catch (error) {
@@ -510,37 +518,27 @@ export default function SoilTestsTab() {
     const dataSheetRows = useMemo(() => {
         if (!backendRecordsMode) return [];
 
-        const sourceUploadDisplay = (uploadId) => {
-            if (uploadId == null || uploadId === "") return "";
-            const u = sourceUploadMap.get(uploadId);
-            if (!u) return String(uploadId);
-            return u.filename || u.originalFilename || String(uploadId);
-        };
-
         const soilRows = filteredSavedSoil.map((test) => {
             const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
             const sd = test.soil_data || {};
+            const linkedFieldName = test.field_id ? fieldsMap.get(test.field_id) : null;
             return {
                 id: test.id,
+                rowKind: "soil",
                 family: "Soil Test",
-                status: "saved",
                 fieldName: displayFieldName,
+                linkedFieldName: linkedFieldName || "—",
                 crop: displayCrop ?? "",
                 recordDateRaw: test.test_date,
                 lastUpdatedRaw: test.updated_date,
-                sourceUploadId: test.sourceUploadId,
-                sourceUploadDisplay: sourceUploadDisplay(test.sourceUploadId),
-                shi: test.soil_health_index ?? null,
                 ph: sd.ph ?? null,
                 organicMatter: sd.organic_matter ?? null,
-                nitrogen: sd.nitrogen ?? null,
                 phosphorus: sd.phosphorus ?? null,
                 potassium: sd.potassium ?? null,
-                ticketNumber: null,
-                netBushels: null,
-                pricePerBu: null,
+                cec: sd.cec ?? null,
             };
         });
+
         const yieldRows = filteredSavedYield.map((rec) => {
             const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
             const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || "—";
@@ -557,34 +555,166 @@ export default function SoilTestsTab() {
                 null;
             const priceValue =
                 rec.price_per_bu ?? rec.pricePerBushel ?? rec.price_per_bushel ?? null;
+            const moisture =
+                rec.moisture ?? rec.moisture_pct ?? rec.moisture_percent ?? rec.moisturePct ?? null;
+            const testWeight = rec.test_weight ?? rec.testWeight ?? null;
             return {
                 id: rec.id,
+                rowKind: "yield",
                 family: "Yield Ticket",
-                status: "saved",
                 fieldName,
                 crop: crop === "—" ? "" : crop,
                 recordDateRaw: rec.ticket_date ?? rec.ticketDate,
                 lastUpdatedRaw: rec.updatedAt ?? rec.createdAt,
-                sourceUploadId: rec.sourceUploadId,
-                sourceUploadDisplay: sourceUploadDisplay(rec.sourceUploadId),
-                shi: null,
-                ph: null,
-                organicMatter: null,
-                nitrogen: null,
-                phosphorus: null,
-                potassium: null,
                 ticketNumber: rec.ticket_number ?? rec.ticketNumber ?? null,
                 netBushels: netBushelsValue,
                 pricePerBu: priceValue,
+                moisture,
+                testWeight,
             };
         });
 
-        if (dataSheetRowModel === ROW_MODEL_SOIL_TESTS) return soilRows;
-        if (dataSheetRowModel === ROW_MODEL_YIELD_TICKETS) return yieldRows;
-        return [...soilRows, ...yieldRows];
+        if (dataSheetType === SHEET_YIELD) return yieldRows;
+        if (dataSheetType === SHEET_FIELDS) {
+            const groups = new Map();
+
+            const ensure = (key, fieldId, fieldLabel) => {
+                if (!groups.has(key)) {
+                    groups.set(key, {
+                        fieldId: fieldId ?? null,
+                        fieldLabel: fieldLabel || "Unnamed",
+                        soilTests: [],
+                        yields: [],
+                    });
+                }
+                return groups.get(key);
+            };
+
+            filteredSavedSoil.forEach((test) => {
+                const { displayFieldName } = getSavedSoilDisplay(test);
+                const key = test.field_id ? `fid:${test.field_id}` : `name:${displayFieldName}`;
+                const label =
+                    test.field_id && fieldsMap.get(test.field_id)
+                        ? fieldsMap.get(test.field_id)
+                        : displayFieldName;
+                const g = ensure(key, test.field_id, label);
+                g.soilTests.push(test);
+            });
+
+            filteredSavedYield.forEach((rec) => {
+                const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
+                const fieldId = upload?.linkedFieldId ?? rec.field_id ?? null;
+                const fieldName =
+                    (fieldId && fieldsMap.get(fieldId)) ||
+                    upload?.linkedFieldName ||
+                    rec.field_name ||
+                    upload?.enteredFieldLabel ||
+                    "—";
+                const key = fieldId ? `fid:${fieldId}` : `name:${fieldName}`;
+                const g = ensure(key, fieldId, fieldName);
+                g.yields.push(rec);
+            });
+
+            const parseMs = (v) => {
+                if (v == null || v === "") return null;
+                try {
+                    const d = typeof v === "string" ? parseISO(v) : new Date(v);
+                    return isValid(d) ? d.getTime() : null;
+                } catch {
+                    return null;
+                }
+            };
+
+            const out = [];
+            groups.forEach((g, key) => {
+                const fieldId = g.fieldId;
+                const fieldName = fieldId ? fieldsMap.get(fieldId) || g.fieldLabel : g.fieldLabel;
+                const acres = fieldId ? fieldAcresMap.get(fieldId) ?? null : null;
+
+                const soilTests = g.soilTests;
+                const yields = g.yields;
+
+                const soilLatest = [...soilTests].sort((a, b) => {
+                    const ta = parseMs(a.test_date) ?? 0;
+                    const tb = parseMs(b.test_date) ?? 0;
+                    return tb - ta;
+                })[0];
+                const sdLatest = soilLatest?.soil_data || {};
+
+                const latestSoilDates = soilTests.map((t) => parseMs(t.test_date)).filter(Boolean);
+                const latestYieldDates = yields.map((r) =>
+                    parseMs(r.ticket_date ?? r.ticketDate)
+                ).filter(Boolean);
+
+                const latestSoilDateMs = latestSoilDates.length ? Math.max(...latestSoilDates) : null;
+                const latestYieldDateMs = latestYieldDates.length ? Math.max(...latestYieldDates) : null;
+
+                let totalNet = 0;
+                let hasNet = false;
+                yields.forEach((r) => {
+                    const n =
+                        r.net_bushels ??
+                        r.netBushels ??
+                        r.quantity_bushels ??
+                        r.quantityBushels ??
+                        null;
+                    if (n != null && Number.isFinite(Number(n))) {
+                        totalNet += Number(n);
+                        hasNet = true;
+                    }
+                });
+
+                const allUpdates = [
+                    ...soilTests.map((t) => parseMs(t.updated_date)),
+                    ...yields.map((r) => parseMs(r.updatedAt ?? r.createdAt)),
+                ].filter(Boolean);
+                const lastUpdatedMs = allUpdates.length ? Math.max(...allUpdates) : null;
+
+                const yLatest = yields.length
+                    ? [...yields].sort(
+                          (a, b) =>
+                              (parseMs(b.ticket_date ?? b.ticketDate) ?? 0) -
+                              (parseMs(a.ticket_date ?? a.ticketDate) ?? 0)
+                      )[0]
+                    : null;
+                const tSoil = soilLatest ? parseMs(soilLatest.test_date) : 0;
+                const tYield = yLatest ? parseMs(yLatest.ticket_date ?? yLatest.ticketDate) : 0;
+                let latestCrop = "";
+                if (yLatest && (!soilLatest || tYield > tSoil)) {
+                    const c = yLatest.crop ?? yLatest.crop_type;
+                    latestCrop = c != null && c !== "" ? String(c) : "";
+                } else if (soilLatest?.crop_type) {
+                    latestCrop = String(soilLatest.crop_type);
+                }
+
+                out.push({
+                    id: `field-${key}`,
+                    rowKind: "field",
+                    fieldId: fieldId || null,
+                    fieldName: fieldName || "—",
+                    acres,
+                    latestCrop,
+                    soilTestCount: soilTests.length,
+                    yieldTicketCount: yields.length,
+                    latestSoilDate: latestSoilDateMs ? new Date(latestSoilDateMs).toISOString() : null,
+                    latestPh: sdLatest.ph ?? null,
+                    latestP: sdLatest.phosphorus ?? null,
+                    latestK: sdLatest.potassium ?? null,
+                    latestYieldDate: latestYieldDateMs ? new Date(latestYieldDateMs).toISOString() : null,
+                    totalNetBushels: hasNet ? totalNet : null,
+                    lastUpdatedRaw: lastUpdatedMs ? new Date(lastUpdatedMs).toISOString() : null,
+                });
+            });
+
+            return out.sort((a, b) => String(a.fieldName).localeCompare(String(b.fieldName)));
+        }
+
+        return soilRows;
     }, [
         backendRecordsMode,
-        dataSheetRowModel,
+        dataSheetType,
+        fieldAcresMap,
+        fieldsMap,
         filteredSavedSoil,
         filteredSavedYield,
         getSavedSoilDisplay,
@@ -606,17 +736,25 @@ export default function SoilTestsTab() {
         setRecordDetail({ kind: "yield", record: rec });
     }, []);
 
-    const openFromDataSheetRow = useCallback(
+    const handleDataSheetView = useCallback(
         (row) => {
-            if (row.family === "Soil Test") {
+            if (row.rowKind === "field") {
+                if (row.fieldId) {
+                    navigate(createFieldDeepLink(row.fieldId));
+                } else {
+                    toast.info("This row is not linked to a map field.");
+                }
+                return;
+            }
+            if (row.rowKind === "soil") {
                 const t = filteredSavedSoil.find((x) => x.id === row.id);
                 if (t) setRecordDetail({ kind: "soil", record: t });
-            } else {
+            } else if (row.rowKind === "yield") {
                 const y = filteredSavedYield.find((x) => x.id === row.id);
                 if (y) setRecordDetail({ kind: "yield", record: y });
             }
         },
-        [filteredSavedSoil, filteredSavedYield]
+        [filteredSavedSoil, filteredSavedYield, navigate]
     );
 
     const handleExport = async () => {
@@ -963,9 +1101,9 @@ export default function SoilTestsTab() {
                                         <SavedRecordsDataSheet
                                             ref={savedRecordsDataSheetRef}
                                             rows={dataSheetRows}
-                                            rowModel={dataSheetRowModel}
-                                            onRowModelChange={setDataSheetRowModel}
-                                            onViewRecord={openFromDataSheetRow}
+                                            sheetType={dataSheetType}
+                                            onSheetTypeChange={setDataSheetType}
+                                            onViewRecord={handleDataSheetView}
                                         />
                                     </div>
                                 </>

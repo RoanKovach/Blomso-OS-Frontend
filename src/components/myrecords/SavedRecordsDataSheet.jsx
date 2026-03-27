@@ -2,51 +2,21 @@ import React, { useMemo, useState, forwardRef, useImperativeHandle, useEffect } 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowUpDown, Eye } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowUpDown, Eye, Columns3 } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { formatDateOnlySafe } from "./dateUtils";
 import { downloadCsv } from "./csvExport";
 import { toast } from "sonner";
 import {
-    ROW_MODEL_RECORD_LEDGER,
-    ROW_MODEL_SOIL_TESTS,
-    ROW_MODEL_YIELD_TICKETS,
-    ROW_MODEL_FIELD_SUMMARY,
-    ROW_MODEL_FIELD_SEASON,
-    COLUMN_PRESET_FARMER,
-    COLUMN_PRESET_MODELING,
-    COLUMN_PRESET_AGRONOMIST_SOIL,
-    COLUMN_PRESET_AGRONOMIST_YIELD,
-    DEFAULT_COLUMN_PRESET,
-    PRESET_COLUMN_KEYS,
+    SHEET_SOIL,
+    SHEET_YIELD,
+    SHEET_FIELDS,
+    DEFAULT_SHEET_TYPE,
+    getColumnsForSheet,
+    getDefaultVisibleKeys,
 } from "./dataSheetConfig";
-
-/** Full registry (sortKey aligns with row keys on dataSheetRows) */
-const COLUMN_REGISTRY = [
-    { key: "id", label: "Record id", sortKey: "id" },
-    { key: "family", label: "Family", sortKey: "family" },
-    { key: "fieldName", label: "Field", sortKey: "fieldName" },
-    { key: "crop", label: "Crop", sortKey: "crop" },
-    { key: "recordDateRaw", label: "Record Date", sortKey: "recordDateRaw" },
-    { key: "lastUpdatedRaw", label: "Last Updated", sortKey: "lastUpdatedRaw" },
-    { key: "status", label: "Status", sortKey: "status" },
-    { key: "sourceUploadDisplay", label: "Source Upload", sortKey: "sourceUploadDisplay" },
-    { key: "shi", label: "SHI", sortKey: "shi" },
-    { key: "ph", label: "pH", sortKey: "ph" },
-    { key: "organicMatter", label: "OM %", sortKey: "organicMatter" },
-    { key: "nitrogen", label: "N", sortKey: "nitrogen" },
-    { key: "phosphorus", label: "P (ppm)", sortKey: "phosphorus" },
-    { key: "potassium", label: "K (ppm)", sortKey: "potassium" },
-    { key: "ticketNumber", label: "Ticket #", sortKey: "ticketNumber" },
-    { key: "netBushels", label: "Net Bu", sortKey: "netBushels" },
-    { key: "pricePerBu", label: "Price/Bu", sortKey: "pricePerBu" },
-];
-
-const COL_BY_KEY = Object.fromEntries(COLUMN_REGISTRY.map((c) => [c.key, c]));
-
-function keysToColumns(keys) {
-    return keys.map((k) => COL_BY_KEY[k]).filter(Boolean);
-}
 
 function displayRecordDate(raw) {
     if (raw == null || raw === "") return "—";
@@ -72,7 +42,12 @@ function displayNum(v) {
 
 function sortValue(row, key) {
     const v = row[key];
-    if (key === "recordDateRaw" || key === "lastUpdatedRaw") {
+    if (
+        key === "recordDateRaw" ||
+        key === "lastUpdatedRaw" ||
+        key === "latestSoilDate" ||
+        key === "latestYieldDate"
+    ) {
         if (v == null || v === "") return null;
         try {
             const d = typeof v === "string" ? parseISO(v) : new Date(v);
@@ -104,23 +79,32 @@ function cellForExport(row, key) {
             return displayRecordDate(row.recordDateRaw) === "—" ? "" : displayRecordDate(row.recordDateRaw);
         case "lastUpdatedRaw":
             return displayLastUpdated(row.lastUpdatedRaw) === "—" ? "" : displayLastUpdated(row.lastUpdatedRaw);
+        case "latestSoilDate":
+            return displayRecordDate(row.latestSoilDate) === "—" ? "" : displayRecordDate(row.latestSoilDate);
+        case "latestYieldDate":
+            return displayRecordDate(row.latestYieldDate) === "—" ? "" : displayRecordDate(row.latestYieldDate);
         case "ph":
         case "organicMatter":
-        case "nitrogen":
         case "phosphorus":
         case "potassium":
+        case "cec":
         case "netBushels":
         case "pricePerBu":
-        case "shi":
+        case "moisture":
+        case "testWeight":
+        case "latestPh":
+        case "latestP":
+        case "latestK":
+        case "acres":
+        case "totalNetBushels":
+            return row[key] === null || row[key] === undefined ? "" : String(row[key]);
+        case "soilTestCount":
+        case "yieldTicketCount":
             return row[key] === null || row[key] === undefined ? "" : String(row[key]);
         case "ticketNumber":
             return row.ticketNumber === null || row.ticketNumber === undefined ? "" : String(row.ticketNumber);
-        case "status":
-            return row.status == null ? "" : String(row.status);
         case "id":
             return row.id == null ? "" : String(row.id);
-        case "sourceUploadDisplay":
-            return row.sourceUploadDisplay == null ? "" : String(row.sourceUploadDisplay);
         default:
             return row[key] === null || row[key] === undefined ? "" : String(row[key]);
     }
@@ -132,48 +116,69 @@ function renderCell(row, key) {
             return displayRecordDate(row.recordDateRaw);
         case "lastUpdatedRaw":
             return displayLastUpdated(row.lastUpdatedRaw);
+        case "latestSoilDate":
+            return displayRecordDate(row.latestSoilDate);
+        case "latestYieldDate":
+            return displayRecordDate(row.latestYieldDate);
         case "ph":
         case "organicMatter":
-        case "nitrogen":
         case "phosphorus":
         case "potassium":
+        case "cec":
         case "netBushels":
         case "pricePerBu":
-        case "shi":
+        case "moisture":
+        case "testWeight":
+        case "latestPh":
+        case "latestP":
+        case "latestK":
+        case "acres":
+        case "totalNetBushels":
             return displayNum(row[key]);
+        case "soilTestCount":
+        case "yieldTicketCount":
+            return row[key] != null ? String(row[key]) : "—";
         case "ticketNumber":
             return row.ticketNumber != null && row.ticketNumber !== "" ? String(row.ticketNumber) : "—";
-        case "status":
-            return row.status ?? "—";
         case "id":
             return row.id != null && row.id !== "" ? String(row.id) : "—";
-        case "sourceUploadDisplay":
-            return row.sourceUploadDisplay != null && row.sourceUploadDisplay !== ""
-                ? String(row.sourceUploadDisplay)
-                : "—";
         default:
             return row[key] == null || row[key] === "" ? "—" : String(row[key]);
     }
 }
 
 const SavedRecordsDataSheet = forwardRef(function SavedRecordsDataSheet(
-    { rows = [], onViewRecord, rowModel = ROW_MODEL_RECORD_LEDGER, onRowModelChange },
+    { rows = [], sheetType = DEFAULT_SHEET_TYPE, onSheetTypeChange, onViewRecord },
     ref
 ) {
-    const [preset, setPreset] = useState(DEFAULT_COLUMN_PRESET);
+    const allColumns = useMemo(() => getColumnsForSheet(sheetType), [sheetType]);
+    const [visibleKeys, setVisibleKeys] = useState(() => new Set(getDefaultVisibleKeys(sheetType)));
     const [sortKey, setSortKey] = useState("recordDateRaw");
     const [sortDir, setSortDir] = useState("desc");
 
+    useEffect(() => {
+        setVisibleKeys(new Set(getDefaultVisibleKeys(sheetType)));
+        if (sheetType === SHEET_FIELDS) {
+            setSortKey("fieldName");
+            setSortDir("asc");
+        } else {
+            setSortKey("recordDateRaw");
+            setSortDir("desc");
+        }
+    }, [sheetType]);
+
     const visibleColumns = useMemo(() => {
-        const keys = PRESET_COLUMN_KEYS[preset] ?? PRESET_COLUMN_KEYS[DEFAULT_COLUMN_PRESET];
-        return keysToColumns(keys);
-    }, [preset]);
+        return allColumns.filter((c) => visibleKeys.has(c.key));
+    }, [allColumns, visibleKeys]);
 
     useEffect(() => {
         const allowed = new Set(visibleColumns.map((c) => c.sortKey));
         if (!allowed.has(sortKey)) {
-            setSortKey("recordDateRaw");
-            setSortDir("desc");
+            const first = visibleColumns[0];
+            if (first) {
+                setSortKey(first.sortKey);
+                setSortDir("asc");
+            }
         }
     }, [visibleColumns, sortKey]);
 
@@ -195,6 +200,19 @@ const SavedRecordsDataSheet = forwardRef(function SavedRecordsDataSheet(
         }
     };
 
+    const toggleColumn = (key, checked) => {
+        setVisibleKeys((prev) => {
+            const next = new Set(prev);
+            if (checked) next.add(key);
+            else next.delete(key);
+            if (next.size === 0) {
+                toast.info("Keep at least one column visible.");
+                return prev;
+            }
+            return next;
+        });
+    };
+
     useImperativeHandle(
         ref,
         () => ({
@@ -203,17 +221,20 @@ const SavedRecordsDataSheet = forwardRef(function SavedRecordsDataSheet(
                     toast.error("No rows to export.");
                     return;
                 }
+                if (!visibleColumns.length) {
+                    toast.error("Select at least one column to export.");
+                    return;
+                }
                 const headers = visibleColumns.map((c) => c.label);
                 const keys = visibleColumns.map((c) => c.key);
                 const dataRows = sortedRows.map((row) => keys.map((k) => cellForExport(row, k)));
                 const stamp = new Date().toISOString().split("T")[0];
-                const safeModel = String(rowModel || ROW_MODEL_RECORD_LEDGER).replace(/[^a-z0-9_-]/gi, "_");
-                const safePreset = String(preset || DEFAULT_COLUMN_PRESET).replace(/[^a-z0-9_-]/gi, "_");
-                downloadCsv(`saved-records-${safeModel}-${safePreset}-${stamp}.csv`, headers, dataRows);
+                const safeType = String(sheetType).replace(/[^a-z0-9_-]/gi, "_");
+                downloadCsv(`saved-records-${safeType}-${stamp}.csv`, headers, dataRows);
                 toast.success("Export complete – downloading file…");
             },
         }),
-        [sortedRows, visibleColumns, rowModel, preset]
+        [sortedRows, visibleColumns, sheetType]
     );
 
     if (!rows.length) {
@@ -228,38 +249,43 @@ const SavedRecordsDataSheet = forwardRef(function SavedRecordsDataSheet(
         <div className="hidden md:block space-y-3">
             <div className="flex flex-wrap items-center gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-gray-600">Row model</span>
-                    <Select value={rowModel} onValueChange={(v) => onRowModelChange?.(v)}>
+                    <span className="text-sm text-gray-600">Sheet type</span>
+                    <Select value={sheetType} onValueChange={(v) => onSheetTypeChange?.(v)}>
                         <SelectTrigger className="h-9 w-[200px]">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value={ROW_MODEL_RECORD_LEDGER}>Record Ledger</SelectItem>
-                            <SelectItem value={ROW_MODEL_SOIL_TESTS}>Soil Tests</SelectItem>
-                            <SelectItem value={ROW_MODEL_YIELD_TICKETS}>Yield Tickets</SelectItem>
-                            <SelectItem value={ROW_MODEL_FIELD_SUMMARY} disabled>
-                                Field Summary (coming soon)
-                            </SelectItem>
-                            <SelectItem value={ROW_MODEL_FIELD_SEASON} disabled>
-                                Field-Season (coming soon)
-                            </SelectItem>
+                            <SelectItem value={SHEET_SOIL}>Soil Tests</SelectItem>
+                            <SelectItem value={SHEET_YIELD}>Yield Tickets</SelectItem>
+                            <SelectItem value={SHEET_FIELDS}>Fields</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-gray-600">Column preset</span>
-                    <Select value={preset} onValueChange={setPreset}>
-                        <SelectTrigger className="h-9 w-[220px]">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={COLUMN_PRESET_FARMER}>Farmer Summary</SelectItem>
-                            <SelectItem value={COLUMN_PRESET_MODELING}>Modeling Basic</SelectItem>
-                            <SelectItem value={COLUMN_PRESET_AGRONOMIST_SOIL}>Agronomist Soil</SelectItem>
-                            <SelectItem value={COLUMN_PRESET_AGRONOMIST_YIELD}>Agronomist Yield</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" size="sm" className="h-9 gap-2">
+                            <Columns3 className="h-4 w-4" />
+                            Columns
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3" align="start">
+                        <p className="mb-2 text-xs font-medium text-gray-600">Show or hide columns</p>
+                        <div className="max-h-64 space-y-2 overflow-y-auto">
+                            {allColumns.map((col) => (
+                                <label
+                                    key={col.key}
+                                    className="flex cursor-pointer items-center gap-2 text-sm"
+                                >
+                                    <Checkbox
+                                        checked={visibleKeys.has(col.key)}
+                                        onCheckedChange={(c) => toggleColumn(col.key, !!c)}
+                                    />
+                                    <span>{col.label}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </PopoverContent>
+                </Popover>
             </div>
             <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
                 <Table className="text-sm">

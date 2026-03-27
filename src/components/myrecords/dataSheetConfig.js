@@ -1,63 +1,67 @@
 /**
- * Data Sheet v2.2 — row models and column preset key lists (frontend-only).
+ * Data Sheet — one sheet type = one row grain. Column lists per sheet; defaults for show/hide.
  */
 
-export const ROW_MODEL_RECORD_LEDGER = "record_ledger";
-export const ROW_MODEL_SOIL_TESTS = "soil_tests";
-export const ROW_MODEL_YIELD_TICKETS = "yield_tickets";
-export const ROW_MODEL_FIELD_SUMMARY = "field_summary";
-export const ROW_MODEL_FIELD_SEASON = "field_season";
+export const SHEET_SOIL = "soil_tests";
+export const SHEET_YIELD = "yield_tickets";
+export const SHEET_FIELDS = "fields";
 
-export const COLUMN_PRESET_FARMER = "farmer";
-export const COLUMN_PRESET_MODELING = "modeling";
-export const COLUMN_PRESET_AGRONOMIST_SOIL = "agronomist_soil";
-export const COLUMN_PRESET_AGRONOMIST_YIELD = "agronomist_yield";
+export const DEFAULT_SHEET_TYPE = SHEET_SOIL;
 
-/** Default column preset when opening Data Sheet */
-export const DEFAULT_COLUMN_PRESET = COLUMN_PRESET_MODELING;
+/** Full column defs per sheet: { key, label, sortKey } */
+export const SOIL_COLUMNS = [
+    { key: "fieldName", label: "Field", sortKey: "fieldName" },
+    { key: "linkedFieldName", label: "Linked Field", sortKey: "linkedFieldName" },
+    { key: "crop", label: "Crop", sortKey: "crop" },
+    { key: "recordDateRaw", label: "Test Date", sortKey: "recordDateRaw" },
+    { key: "ph", label: "pH", sortKey: "ph" },
+    { key: "organicMatter", label: "OM %", sortKey: "organicMatter" },
+    { key: "phosphorus", label: "P (ppm)", sortKey: "phosphorus" },
+    { key: "potassium", label: "K (ppm)", sortKey: "potassium" },
+    { key: "cec", label: "CEC", sortKey: "cec" },
+    { key: "lastUpdatedRaw", label: "Last Updated", sortKey: "lastUpdatedRaw" },
+];
 
-/** @type {Record<string, string[]>} */
-export const PRESET_COLUMN_KEYS = {
-    [COLUMN_PRESET_FARMER]: [
-        "fieldName",
-        "crop",
-        "recordDateRaw",
-        "family",
-        "ph",
-        "ticketNumber",
-        "netBushels",
-        "pricePerBu",
-        "sourceUploadDisplay",
-    ],
-    [COLUMN_PRESET_MODELING]: [
-        "id",
-        "family",
-        "fieldName",
-        "crop",
-        "recordDateRaw",
-        "lastUpdatedRaw",
-        "ph",
-        "phosphorus",
-        "potassium",
-        "ticketNumber",
-        "netBushels",
-        "pricePerBu",
-    ],
-    [COLUMN_PRESET_AGRONOMIST_SOIL]: [
-        "fieldName",
-        "crop",
-        "recordDateRaw",
-        "ph",
-        "organicMatter",
-        "phosphorus",
-        "potassium",
-    ],
-    [COLUMN_PRESET_AGRONOMIST_YIELD]: [
-        "fieldName",
-        "crop",
-        "recordDateRaw",
-        "ticketNumber",
-        "netBushels",
-        "pricePerBu",
-    ],
-};
+export const YIELD_COLUMNS = [
+    { key: "fieldName", label: "Field", sortKey: "fieldName" },
+    { key: "crop", label: "Crop", sortKey: "crop" },
+    { key: "recordDateRaw", label: "Ticket Date", sortKey: "recordDateRaw" },
+    { key: "ticketNumber", label: "Ticket #", sortKey: "ticketNumber" },
+    { key: "netBushels", label: "Net Bushels", sortKey: "netBushels" },
+    { key: "pricePerBu", label: "Price/Bu", sortKey: "pricePerBu" },
+    { key: "moisture", label: "Moisture", sortKey: "moisture" },
+    { key: "testWeight", label: "Test Weight", sortKey: "testWeight" },
+    { key: "lastUpdatedRaw", label: "Last Updated", sortKey: "lastUpdatedRaw" },
+];
+
+export const FIELD_COLUMNS = [
+    { key: "fieldName", label: "Field", sortKey: "fieldName" },
+    { key: "acres", label: "Acres", sortKey: "acres" },
+    { key: "latestCrop", label: "Latest Crop", sortKey: "latestCrop" },
+    { key: "soilTestCount", label: "Soil Test Count", sortKey: "soilTestCount" },
+    { key: "yieldTicketCount", label: "Yield Ticket Count", sortKey: "yieldTicketCount" },
+    { key: "latestSoilDate", label: "Latest Soil Date", sortKey: "latestSoilDate" },
+    { key: "latestPh", label: "Latest pH", sortKey: "latestPh" },
+    { key: "latestP", label: "Latest P", sortKey: "latestP" },
+    { key: "latestK", label: "Latest K", sortKey: "latestK" },
+    { key: "latestYieldDate", label: "Latest Yield Date", sortKey: "latestYieldDate" },
+    { key: "totalNetBushels", label: "Total Net Bushels", sortKey: "totalNetBushels" },
+    { key: "lastUpdatedRaw", label: "Last Updated", sortKey: "lastUpdatedRaw" },
+];
+
+/** Default visible column keys (View column is always separate in UI) */
+export const DEFAULT_VISIBLE_SOIL = SOIL_COLUMNS.map((c) => c.key);
+export const DEFAULT_VISIBLE_YIELD = YIELD_COLUMNS.map((c) => c.key);
+export const DEFAULT_VISIBLE_FIELDS = FIELD_COLUMNS.map((c) => c.key);
+
+export function getColumnsForSheet(sheetType) {
+    if (sheetType === SHEET_YIELD) return YIELD_COLUMNS;
+    if (sheetType === SHEET_FIELDS) return FIELD_COLUMNS;
+    return SOIL_COLUMNS;
+}
+
+export function getDefaultVisibleKeys(sheetType) {
+    if (sheetType === SHEET_YIELD) return [...DEFAULT_VISIBLE_YIELD];
+    if (sheetType === SHEET_FIELDS) return [...DEFAULT_VISIBLE_FIELDS];
+    return [...DEFAULT_VISIBLE_SOIL];
+}
