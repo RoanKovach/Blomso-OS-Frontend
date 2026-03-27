@@ -11,7 +11,7 @@ export const DEFAULT_SHEET_TYPE = SHEET_SOIL;
 /** Full column defs per sheet: { key, label, sortKey } — soil_data uses snake_case; row mapper normalizes to these keys */
 export const SOIL_COLUMNS = [
     { key: "fieldName", label: "Field", sortKey: "fieldName" },
-    { key: "linkedFieldName", label: "Linked Field", sortKey: "linkedFieldName" },
+    { key: "sourceFieldLabel", label: "Source label", sortKey: "sourceFieldLabel" },
     { key: "crop", label: "Crop", sortKey: "crop" },
     { key: "acres", label: "Acres", sortKey: "acres" },
     { key: "shi", label: "SHI", sortKey: "shi" },
@@ -33,6 +33,7 @@ export const SOIL_COLUMNS = [
 
 export const YIELD_COLUMNS = [
     { key: "fieldName", label: "Field", sortKey: "fieldName" },
+    { key: "sourceFieldLabel", label: "Source label", sortKey: "sourceFieldLabel" },
     { key: "crop", label: "Crop", sortKey: "crop" },
     { key: "recordDateRaw", label: "Ticket Date", sortKey: "recordDateRaw" },
     { key: "ticketNumber", label: "Ticket #", sortKey: "ticketNumber" },
@@ -67,7 +68,6 @@ export const FIELD_COLUMNS = [
 /** Default visible column keys — tight; rest available via Columns picker */
 export const DEFAULT_VISIBLE_SOIL = [
     "fieldName",
-    "linkedFieldName",
     "crop",
     "recordDateRaw",
     "ph",

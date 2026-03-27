@@ -11,10 +11,11 @@ import { FileText, Sprout, Ticket } from "lucide-react";
 import { format } from "date-fns";
 import ExpandableRow from "./ExpandableRow";
 import { formatDateOnlySafe } from "./dateUtils";
+import { getCanonicalFieldContextForYieldRecord } from "./fieldDisplayUtils";
 
-function YieldDetailBody({ rec, upload, formatLastUpdated }) {
+function YieldDetailBody({ rec, upload, formatLastUpdated, yieldCtx }) {
     const ticketNumber = rec.ticket_number ?? rec.ticketNumber ?? "—";
-    const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || "—";
+    const fieldName = yieldCtx?.displayFieldName ?? "—";
     const cropRaw = rec.crop ?? rec.crop_type ?? "—";
     const crop =
         cropRaw && cropRaw !== "—"
@@ -34,6 +35,10 @@ function YieldDetailBody({ rec, upload, formatLastUpdated }) {
     const rows = [
         { label: "Ticket #", value: ticketNumber },
         { label: "Field", value: fieldName },
+        ...(yieldCtx?.sourceFieldLabel &&
+        yieldCtx.sourceFieldLabel !== yieldCtx.displayFieldName
+            ? [{ label: "Document / source field", value: yieldCtx.sourceFieldLabel }]
+            : []),
         { label: "Crop", value: crop },
         { label: "Ticket date", value: ticketDate },
         { label: "Net bushels", value: net != null && net !== "" ? String(net) : "—" },
@@ -77,6 +82,7 @@ function YieldDetailBody({ rec, upload, formatLastUpdated }) {
  * @param {Map<string, object>} props.sourceUploadMap
  * @param {(test: object) => { displayFieldName: string, displayCrop: string, displayAcres: number|null }} props.getSavedSoilDisplay
  * @param {(date: string|Date) => string} props.formatLastUpdated
+ * @param {(rec: object) => object|null} props.getContext
  */
 export default function RecordDetailDrawer({
     open,
@@ -86,12 +92,17 @@ export default function RecordDetailDrawer({
     sourceUploadMap,
     getSavedSoilDisplay,
     formatLastUpdated,
+    getContext: getContextProp,
 }) {
     if (!detail) return null;
 
+    const getContext = getContextProp ?? (() => null);
     const { kind, record } = detail;
     const upload = record?.sourceUploadId ? sourceUploadMap.get(record.sourceUploadId) : null;
-    const linkedFieldName = record?.field_id ? fieldsMap.get(record.field_id) : null;
+    const yieldCtx =
+        kind === "yield"
+            ? getCanonicalFieldContextForYieldRecord(record, fieldsMap, sourceUploadMap, getContext)
+            : null;
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
@@ -118,10 +129,7 @@ export default function RecordDetailDrawer({
                     <SheetTitle className="pr-8 text-xl">
                         {kind === "soil"
                             ? getSavedSoilDisplay(record).displayFieldName
-                            : upload?.linkedFieldName ||
-                              record.field_name ||
-                              upload?.enteredFieldLabel ||
-                              "Yield record"}
+                            : yieldCtx?.displayFieldName || "Yield record"}
                     </SheetTitle>
                     <SheetDescription className="space-y-1 text-left text-sm text-gray-600">
                         {kind === "soil" ? (
@@ -137,12 +145,18 @@ export default function RecordDetailDrawer({
                                     </span>
                                     <span>Updated: {formatLastUpdated(record.updated_date)}</span>
                                 </div>
-                                {linkedFieldName && (
-                                    <div>
-                                        Linked field:{" "}
-                                        <Badge variant="outline">{linkedFieldName}</Badge>
-                                    </div>
-                                )}
+                                {(() => {
+                                    const s = getSavedSoilDisplay(record);
+                                    return (
+                                        s.sourceFieldLabel &&
+                                        s.sourceFieldLabel !== s.displayFieldName && (
+                                            <div>
+                                                Document / zone:{" "}
+                                                <span className="text-gray-800">{s.sourceFieldLabel}</span>
+                                            </div>
+                                        )
+                                    );
+                                })()}
                             </>
                         ) : (
                             <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -154,6 +168,19 @@ export default function RecordDetailDrawer({
                                         : "—"}
                                 </span>
                                 <span>Updated: {formatLastUpdated(record.updatedAt ?? record.createdAt)}</span>
+                                {yieldCtx?.canonicalFieldName && (
+                                    <span className="inline-flex items-center gap-1">
+                                        Linked field:{" "}
+                                        <Badge variant="outline">{yieldCtx.canonicalFieldName}</Badge>
+                                    </span>
+                                )}
+                                {yieldCtx?.sourceFieldLabel &&
+                                    yieldCtx.sourceFieldLabel !== yieldCtx.displayFieldName && (
+                                        <span>
+                                            Document field:{" "}
+                                            <span className="text-gray-800">{yieldCtx.sourceFieldLabel}</span>
+                                        </span>
+                                    )}
                             </div>
                         )}
                     </SheetDescription>
@@ -172,6 +199,7 @@ export default function RecordDetailDrawer({
                             rec={record}
                             upload={upload}
                             formatLastUpdated={formatLastUpdated}
+                            yieldCtx={yieldCtx}
                         />
                     )}
                 </div>

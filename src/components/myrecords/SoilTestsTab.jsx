@@ -26,7 +26,12 @@ import GridView from "./GridView";
 import ExpandableRow from "./ExpandableRow";
 import SavedRecordsDataSheet from "./SavedRecordsDataSheet";
 import { SHEET_SOIL, SHEET_YIELD, SHEET_FIELDS, DEFAULT_SHEET_TYPE } from "./dataSheetConfig";
+import {
+    getCanonicalFieldContextForSoilTest,
+    getCanonicalFieldContextForYieldRecord,
+} from "./fieldDisplayUtils";
 import RecordDetailDrawer from "./RecordDetailDrawer";
+import FieldSummaryDrawer from "./FieldSummaryDrawer";
 import { blobFromExportSoilTestsResponse } from "./exportSoilTestsResponse";
 import { formatDateOnlySafe } from "./dateUtils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -65,6 +70,7 @@ export default function SoilTestsTab() {
     const [dataSheetType, setDataSheetType] = useState(DEFAULT_SHEET_TYPE);
     const savedRecordsDataSheetRef = useRef(null);
     const [recordDetail, setRecordDetail] = useState(null);
+    const [fieldSummary, setFieldSummary] = useState(null);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -379,10 +385,10 @@ export default function SoilTestsTab() {
         setTestToEdit(test);
     };
 
-    const getContext = (rec) => {
+    const getContext = useCallback((rec) => {
         const cs = rec?.contextSnapshot;
         if (!cs) return null;
-        if (typeof cs === 'string') {
+        if (typeof cs === "string") {
             try {
                 return JSON.parse(cs);
             } catch {
@@ -390,7 +396,7 @@ export default function SoilTestsTab() {
             }
         }
         return cs;
-    };
+    }, []);
 
     const getFamilyLabel = (family) => {
         if (!family || family === 'soil_test') return 'Soil Test';
@@ -406,26 +412,24 @@ export default function SoilTestsTab() {
 
     const getSavedSoilDisplay = useCallback(
         (test) => {
+            const fc = getCanonicalFieldContextForSoilTest(test, fieldsMap, sourceUploadMap, getContext);
             const upload = test.sourceUploadId ? sourceUploadMap.get(test.sourceUploadId) : null;
             const ctx = upload ? getContext(upload) : null;
-            const displayFieldName =
-                upload?.linkedFieldName ||
-                test.field_name ||
-                upload?.enteredFieldLabel ||
-                ctx?.field_name ||
-                upload?.filename ||
-                "Unnamed";
-            const displayCrop =
-                test.crop_type ?? ctx?.intended_crop ?? null;
+            const displayCrop = test.crop_type ?? ctx?.intended_crop ?? null;
             const displayAcres =
                 test.field_size_acres != null
                     ? test.field_size_acres
                     : ctx?.field_size_acres != null
-                        ? ctx.field_size_acres
-                        : null;
-            return { displayFieldName, displayCrop, displayAcres };
+                      ? ctx.field_size_acres
+                      : null;
+            return {
+                ...fc,
+                displayFieldName: fc.displayFieldName,
+                displayCrop,
+                displayAcres,
+            };
         },
-        [sourceUploadMap]
+        [fieldsMap, sourceUploadMap, getContext]
     );
 
     const getUploadDisplayStatus = useCallback((rec) => {
@@ -445,7 +449,12 @@ export default function SoilTestsTab() {
 
         uploadRecords.forEach((rec) => {
             const ctx = getContext(rec);
-            const fieldName = rec.linkedFieldName || rec.field_name || rec.enteredFieldLabel || ctx?.field_name;
+            const fieldName =
+                (rec.linkedFieldId && fieldsMap.get(rec.linkedFieldId)) ||
+                rec.linkedFieldName ||
+                rec.field_name ||
+                rec.enteredFieldLabel ||
+                ctx?.field_name;
             const crop = ctx?.intended_crop;
             const status = getUploadDisplayStatus(rec);
             if (fieldName) fields.add(fieldName);
@@ -460,10 +469,9 @@ export default function SoilTestsTab() {
         });
 
         yieldRecords.forEach((rec) => {
-            const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
-            const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel;
+            const fc = getCanonicalFieldContextForYieldRecord(rec, fieldsMap, sourceUploadMap, getContext);
             const crop = rec.crop ?? rec.crop_type ?? null;
-            if (fieldName) fields.add(fieldName);
+            if (fc.displayFieldName) fields.add(fc.displayFieldName);
             if (crop) crops.add(crop);
         });
 
@@ -472,14 +480,20 @@ export default function SoilTestsTab() {
             crops: Array.from(crops).sort((a, b) => String(a).localeCompare(String(b))),
             statuses: Array.from(statuses).sort((a, b) => String(a).localeCompare(String(b))),
         };
-    }, [backendRecordsMode, uploadRecords, tests, yieldRecords, sourceUploadMap, getSavedSoilDisplay, getUploadDisplayStatus]);
+    }, [backendRecordsMode, uploadRecords, tests, yieldRecords, fieldsMap, sourceUploadMap, getSavedSoilDisplay, getUploadDisplayStatus, getContext]);
 
     const filteredUploadRecords = useMemo(() => {
         if (!backendRecordsMode) return uploadRecords;
         return uploadRecords.filter((rec) => {
             const ctx = getContext(rec);
-            const displayFieldName = rec.linkedFieldName || rec.field_name || rec.enteredFieldLabel || ctx?.field_name || '';
-            const displayCrop = ctx?.intended_crop || '';
+            const displayFieldName =
+                (rec.linkedFieldId && fieldsMap.get(rec.linkedFieldId)) ||
+                rec.linkedFieldName ||
+                rec.field_name ||
+                rec.enteredFieldLabel ||
+                ctx?.field_name ||
+                "";
+            const displayCrop = ctx?.intended_crop || "";
             const displayStatus = getUploadDisplayStatus(rec);
             const family = rec.documentFamily === 'yield_scale_ticket' ? 'yield' : 'soil';
 
@@ -489,7 +503,7 @@ export default function SoilTestsTab() {
             if (recordFilters.family !== "all" && family !== recordFilters.family) return false;
             return true;
         });
-    }, [backendRecordsMode, uploadRecords, recordFilters, getUploadDisplayStatus]);
+    }, [backendRecordsMode, uploadRecords, recordFilters, getUploadDisplayStatus, fieldsMap, getContext]);
 
     const filteredSavedSoil = useMemo(() => {
         if (!backendRecordsMode) return tests;
@@ -505,29 +519,27 @@ export default function SoilTestsTab() {
     const filteredSavedYield = useMemo(() => {
         if (!backendRecordsMode) return yieldRecords;
         return yieldRecords.filter((rec) => {
-            const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
-            const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || '';
-            const crop = rec.crop ?? rec.crop_type ?? '';
+            const fc = getCanonicalFieldContextForYieldRecord(rec, fieldsMap, sourceUploadMap, getContext);
+            const crop = rec.crop ?? rec.crop_type ?? "";
             if (recordFilters.family === "soil") return false;
-            if (recordFilters.field !== "all" && fieldName !== recordFilters.field) return false;
+            if (recordFilters.field !== "all" && fc.displayFieldName !== recordFilters.field) return false;
             if (recordFilters.crop !== "all" && crop !== recordFilters.crop) return false;
             return true;
         });
-    }, [backendRecordsMode, yieldRecords, sourceUploadMap, recordFilters]);
+    }, [backendRecordsMode, yieldRecords, fieldsMap, sourceUploadMap, recordFilters, getContext]);
 
     const dataSheetRows = useMemo(() => {
         if (!backendRecordsMode) return [];
 
         const soilRows = filteredSavedSoil.map((test) => {
-            const { displayFieldName, displayCrop, displayAcres } = getSavedSoilDisplay(test);
+            const { displayFieldName, displayCrop, displayAcres, sourceFieldLabel } = getSavedSoilDisplay(test);
             const sd = test.soil_data || {};
-            const linkedFieldName = test.field_id ? fieldsMap.get(test.field_id) : null;
             return {
                 id: test.id,
                 rowKind: "soil",
                 family: "Soil Test",
                 fieldName: displayFieldName,
-                linkedFieldName: linkedFieldName || "—",
+                sourceFieldLabel: sourceFieldLabel || "",
                 crop: displayCrop ?? "",
                 acres: displayAcres ?? test.field_size_acres ?? null,
                 shi: test.soil_health_index ?? null,
@@ -549,8 +561,8 @@ export default function SoilTestsTab() {
         });
 
         const yieldRows = filteredSavedYield.map((rec) => {
-            const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
-            const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || "—";
+            const fc = getCanonicalFieldContextForYieldRecord(rec, fieldsMap, sourceUploadMap, getContext);
+            const fieldName = fc.displayFieldName;
             const cropRaw = rec.crop ?? rec.crop_type ?? "—";
             const crop =
                 cropRaw && cropRaw !== "—"
@@ -584,6 +596,7 @@ export default function SoilTestsTab() {
                 rowKind: "yield",
                 family: "Yield Ticket",
                 fieldName,
+                sourceFieldLabel: fc.sourceFieldLabel || "",
                 crop: crop === "—" ? "" : crop,
                 recordDateRaw: rec.ticket_date ?? rec.ticketDate,
                 lastUpdatedRaw: rec.updatedAt ?? rec.createdAt,
@@ -605,40 +618,27 @@ export default function SoilTestsTab() {
         if (dataSheetType === SHEET_FIELDS) {
             const groups = new Map();
 
-            const ensure = (key, fieldId, fieldLabel) => {
-                if (!groups.has(key)) {
-                    groups.set(key, {
+            const ensure = (groupKey, fieldId, fieldLabel) => {
+                if (!groups.has(groupKey)) {
+                    groups.set(groupKey, {
                         fieldId: fieldId ?? null,
                         fieldLabel: fieldLabel || "Unnamed",
                         soilTests: [],
                         yields: [],
                     });
                 }
-                return groups.get(key);
+                return groups.get(groupKey);
             };
 
             filteredSavedSoil.forEach((test) => {
-                const { displayFieldName } = getSavedSoilDisplay(test);
-                const key = test.field_id ? `fid:${test.field_id}` : `name:${displayFieldName}`;
-                const label =
-                    test.field_id && fieldsMap.get(test.field_id)
-                        ? fieldsMap.get(test.field_id)
-                        : displayFieldName;
-                const g = ensure(key, test.field_id, label);
+                const fc = getCanonicalFieldContextForSoilTest(test, fieldsMap, sourceUploadMap, getContext);
+                const g = ensure(fc.groupKey, fc.canonicalFieldId, fc.displayFieldName);
                 g.soilTests.push(test);
             });
 
             filteredSavedYield.forEach((rec) => {
-                const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
-                const fieldId = upload?.linkedFieldId ?? rec.field_id ?? null;
-                const fieldName =
-                    (fieldId && fieldsMap.get(fieldId)) ||
-                    upload?.linkedFieldName ||
-                    rec.field_name ||
-                    upload?.enteredFieldLabel ||
-                    "—";
-                const key = fieldId ? `fid:${fieldId}` : `name:${fieldName}`;
-                const g = ensure(key, fieldId, fieldName);
+                const fc = getCanonicalFieldContextForYieldRecord(rec, fieldsMap, sourceUploadMap, getContext);
+                const g = ensure(fc.groupKey, fc.canonicalFieldId, fc.displayFieldName);
                 g.yields.push(rec);
             });
 
@@ -653,7 +653,7 @@ export default function SoilTestsTab() {
             };
 
             const out = [];
-            groups.forEach((g, key) => {
+            groups.forEach((g, groupKey) => {
                 const fieldId = g.fieldId;
                 const fieldName = fieldId ? fieldsMap.get(fieldId) || g.fieldLabel : g.fieldLabel;
                 const acres = fieldId ? fieldAcresMap.get(fieldId) ?? null : null;
@@ -715,8 +715,9 @@ export default function SoilTestsTab() {
                 }
 
                 out.push({
-                    id: `field-${key}`,
+                    id: `field-${groupKey}`,
                     rowKind: "field",
+                    groupKey,
                     fieldId: fieldId || null,
                     fieldName: fieldName || "—",
                     acres,
@@ -746,6 +747,7 @@ export default function SoilTestsTab() {
         filteredSavedYield,
         getSavedSoilDisplay,
         sourceUploadMap,
+        getContext,
     ]);
 
     const openSoilView = useCallback(
@@ -766,11 +768,28 @@ export default function SoilTestsTab() {
     const handleDataSheetView = useCallback(
         (row) => {
             if (row.rowKind === "field") {
-                if (row.fieldId) {
-                    navigate(createFieldDeepLink(row.fieldId));
-                } else {
-                    toast.info("This row is not linked to a map field.");
+                const gk = row.groupKey;
+                if (!gk) {
+                    toast.info("Missing field grouping for this row.");
+                    return;
                 }
+                const soilTests = filteredSavedSoil.filter(
+                    (t) =>
+                        getCanonicalFieldContextForSoilTest(t, fieldsMap, sourceUploadMap, getContext).groupKey ===
+                        gk
+                );
+                const yieldRecords = filteredSavedYield.filter(
+                    (r) =>
+                        getCanonicalFieldContextForYieldRecord(r, fieldsMap, sourceUploadMap, getContext).groupKey ===
+                        gk
+                );
+                setFieldSummary({
+                    open: true,
+                    fieldId: row.fieldId ?? null,
+                    fieldName: row.fieldName ?? "—",
+                    soilTests,
+                    yieldRecords,
+                });
                 return;
             }
             if (row.rowKind === "soil") {
@@ -781,7 +800,7 @@ export default function SoilTestsTab() {
                 if (y) setRecordDetail({ kind: "yield", record: y });
             }
         },
-        [filteredSavedSoil, filteredSavedYield, navigate]
+        [filteredSavedSoil, filteredSavedYield, fieldsMap, sourceUploadMap, getContext]
     );
 
     const handleExport = async () => {
@@ -1145,7 +1164,6 @@ export default function SoilTestsTab() {
                                                 <TableRow>
                                                     <TableHead className="w-12"></TableHead>
                                                     <TableHead>Field</TableHead>
-                                                    <TableHead>Linked Field</TableHead>
                                                     <TableHead>Test Date</TableHead>
                                                     <TableHead>Crop</TableHead>
                                                     <TableHead>SHI</TableHead>
@@ -1155,8 +1173,7 @@ export default function SoilTestsTab() {
                                             </TableHeader>
                                             <TableBody>
                                                 {filteredSavedSoil.map(test => {
-                                                    const { displayFieldName, displayCrop, displayAcres } = getSavedSoilDisplay(test);
-                                                    const linkedFieldName = fieldsMap.get(test.field_id);
+                                                    const { displayFieldName, displayCrop, displayAcres, sourceFieldLabel, canonicalFieldId } = getSavedSoilDisplay(test);
                                                     const testDateStr = formatDateOnlySafe(test.test_date) || 'N/A';
                                                     return (
                                                         <React.Fragment key={test.id}>
@@ -1166,23 +1183,27 @@ export default function SoilTestsTab() {
                                                                         {expandedRows.has(test.id) ? '−' : '+'}
                                                                     </Button>
                                                                 </TableCell>
-                                                                <TableCell className="font-medium">{displayFieldName}</TableCell>
-                                                                <TableCell>
-                                                                    {linkedFieldName ? (
-                                                                        <div className="flex items-center gap-2">
-                                                                            <Badge variant="outline">{linkedFieldName}</Badge>
+                                                                <TableCell className="font-medium">
+                                                                    <div className="flex items-start gap-2">
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div>{displayFieldName}</div>
+                                                                            {sourceFieldLabel && sourceFieldLabel !== displayFieldName && (
+                                                                                <div className="text-xs font-normal text-gray-500">Source: {sourceFieldLabel}</div>
+                                                                            )}
+                                                                        </div>
+                                                                        {canonicalFieldId && (
                                                                             <TooltipProvider>
                                                                                 <Tooltip>
                                                                                     <TooltipTrigger asChild>
-                                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-500 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); navigate(createFieldDeepLink(test.field_id)); }}>
+                                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-gray-500 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); navigate(createFieldDeepLink(canonicalFieldId)); }}>
                                                                                             <MapPin className="h-4 w-4" />
                                                                                         </Button>
                                                                                     </TooltipTrigger>
                                                                                     <TooltipContent><p>View on Map</p></TooltipContent>
                                                                                 </Tooltip>
                                                                             </TooltipProvider>
-                                                                        </div>
-                                                                    ) : <span className="text-gray-400">—</span>}
+                                                                        )}
+                                                                    </div>
                                                                 </TableCell>
                                                                 <TableCell>{testDateStr}</TableCell>
                                                                 <TableCell>{displayCrop ?? 'N/A'}</TableCell>
@@ -1196,7 +1217,7 @@ export default function SoilTestsTab() {
                                                             </TableRow>
                                                             {expandedRows.has(test.id) && (
                                                                 <TableRow>
-                                                                    <TableCell colSpan={8} className="p-0 bg-gray-50/50">
+                                                                    <TableCell colSpan={7} className="p-0 bg-gray-50/50">
                                                                         <ExpandableRow
                                                                             test={test}
                                                                             displayFieldName={displayFieldName}
@@ -1234,9 +1255,9 @@ export default function SoilTestsTab() {
                                             </TableHeader>
                                             <TableBody>
                                                 {filteredSavedYield.map((rec) => {
-                                                    const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
+                                                    const fc = getCanonicalFieldContextForYieldRecord(rec, fieldsMap, sourceUploadMap, getContext);
                                                     const ticketNumber = rec.ticket_number ?? rec.ticketNumber ?? '—';
-                                                    const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || '—';
+                                                    const fieldName = fc.displayFieldName;
                                                     const cropRaw = rec.crop ?? rec.crop_type ?? '—';
                                                     const crop = cropRaw && cropRaw !== '—'
                                                         ? cropRaw.charAt(0).toUpperCase() + cropRaw.slice(1).toLowerCase()
@@ -1263,7 +1284,34 @@ export default function SoilTestsTab() {
                                                     return (
                                                         <TableRow key={rec.id} className="hover:bg-green-50/50">
                                                             <TableCell className="font-medium">{ticketNumber}</TableCell>
-                                                            <TableCell>{fieldName}</TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-start gap-2">
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div>{fieldName}</div>
+                                                                        {fc.sourceFieldLabel && fc.sourceFieldLabel !== fieldName && (
+                                                                            <div className="text-xs text-gray-500">Source: {fc.sourceFieldLabel}</div>
+                                                                        )}
+                                                                    </div>
+                                                                    {fc.canonicalFieldId && (
+                                                                        <TooltipProvider>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <Button
+                                                                                        type="button"
+                                                                                        variant="ghost"
+                                                                                        size="icon"
+                                                                                        className="h-7 w-7 shrink-0 text-gray-500 hover:text-blue-600"
+                                                                                        onClick={() => navigate(createFieldDeepLink(fc.canonicalFieldId))}
+                                                                                    >
+                                                                                        <MapPin className="h-4 w-4" />
+                                                                                    </Button>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent><p>View on Map</p></TooltipContent>
+                                                                            </Tooltip>
+                                                                        </TooltipProvider>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
                                                             <TableCell>{crop}</TableCell>
                                                             <TableCell>{ticketDate}</TableCell>
                                                             <TableCell>{netBushels}</TableCell>
@@ -1311,7 +1359,6 @@ export default function SoilTestsTab() {
                                         <TableRow>
                                             <TableHead className="w-12"></TableHead>
                                             <TableHead>Field</TableHead>
-                                            <TableHead>Linked Field</TableHead> {/* New Column */}
                                             <TableHead>Test Date</TableHead>
                                             <TableHead>Crop</TableHead>
                                             <TableHead>SHI</TableHead>
@@ -1321,8 +1368,7 @@ export default function SoilTestsTab() {
                                     </TableHeader>
                                     <TableBody>
                                         {tests.map(test => {
-                                            const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
-                                            const linkedFieldName = fieldsMap.get(test.field_id);
+                                            const { displayFieldName, displayCrop, sourceFieldLabel, canonicalFieldId } = getSavedSoilDisplay(test);
                                             const testDateStr = formatDateOnlySafe(test.test_date) || 'N/A';
                                             return (
                                                 <React.Fragment key={test.id}>
@@ -1337,36 +1383,37 @@ export default function SoilTestsTab() {
                                                                 {expandedRows.has(test.id) ? '−' : '+'}
                                                             </Button>
                                                         </TableCell>
-                                                        <TableCell className="font-medium">{displayFieldName}</TableCell>
-                                                        {/* New Cell Renderer */}
-                                                        <TableCell>
-                                                            {linkedFieldName ? (
-                                                              <div className="flex items-center gap-2">
-                                                                <Badge variant="outline">{linkedFieldName}</Badge>
-                                                                <TooltipProvider>
-                                                                  <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                      <Button 
-                                                                        variant="ghost" 
-                                                                        size="icon" 
-                                                                        className="h-7 w-7 text-gray-500 hover:text-blue-600"
-                                                                        onClick={(e) => {
-                                                                          e.stopPropagation();
-                                                                          navigate(createFieldDeepLink(test.field_id)); // Use utility function
-                                                                        }}
-                                                                      >
-                                                                        <MapPin className="h-4 w-4" />
-                                                                      </Button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>
-                                                                      <p>View on Map</p>
-                                                                    </TooltipContent>
-                                                                  </Tooltip>
-                                                                </TooltipProvider>
-                                                              </div>
-                                                            ) : (
-                                                              <span className="text-gray-400">—</span>
-                                                            )}
+                                                        <TableCell className="font-medium">
+                                                            <div className="flex items-start gap-2">
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div>{displayFieldName}</div>
+                                                                    {sourceFieldLabel && sourceFieldLabel !== displayFieldName && (
+                                                                        <div className="text-xs font-normal text-gray-500">Source: {sourceFieldLabel}</div>
+                                                                    )}
+                                                                </div>
+                                                                {canonicalFieldId && (
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-7 w-7 shrink-0 text-gray-500 hover:text-blue-600"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        navigate(createFieldDeepLink(canonicalFieldId));
+                                                                                    }}
+                                                                                >
+                                                                                    <MapPin className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent>
+                                                                                <p>View on Map</p>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                )}
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell>{testDateStr}</TableCell>
                                                         <TableCell>{displayCrop ?? 'N/A'}</TableCell>
@@ -1386,7 +1433,7 @@ export default function SoilTestsTab() {
                                                     </TableRow>
                                                     {expandedRows.has(test.id) && (
                                                         <TableRow>
-                                                            <TableCell colSpan={8} className="p-0 bg-gray-50/50"> {/* Colspan updated to 8 */}
+                                                            <TableCell colSpan={7} className="p-0 bg-gray-50/50">
                                                                 <ExpandableRow
                                                                     test={test}
                                                                     displayFieldName={displayFieldName}
@@ -1406,8 +1453,7 @@ export default function SoilTestsTab() {
 
                         <div className="md:hidden space-y-3">
                             {tests.map(test => {
-                                const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
-                                const linkedFieldName = fieldsMap.get(test.field_id);
+                                const { displayFieldName, displayCrop, sourceFieldLabel, canonicalFieldId } = getSavedSoilDisplay(test);
                                 const testDateStr = formatDateOnlySafe(test.test_date) || 'N/A';
                                 return (
                                 <Card key={test.id} className="shadow-sm">
@@ -1417,6 +1463,9 @@ export default function SoilTestsTab() {
                                             <div className="flex justify-between items-start">
                                                 <div className="min-w-0 flex-1 mr-3">
                                                     <h3 className="font-bold text-lg text-gray-900 truncate">{displayFieldName}</h3>
+                                                    {sourceFieldLabel && sourceFieldLabel !== displayFieldName && (
+                                                        <p className="text-xs text-gray-500">Source: {sourceFieldLabel}</p>
+                                                    )}
                                                     <p className="text-sm text-gray-500">
                                                         {testDateStr}
                                                     </p>
@@ -1435,19 +1484,11 @@ export default function SoilTestsTab() {
                                                     <div className="font-medium text-gray-900 text-xs">{formatLastUpdated(test.updated_date)}</div>
                                                 </div>
                                             </div>
-
-                                            {/* Mobile Linked Field Info */}
-                                            {linkedFieldName && (
-                                                <div className="flex items-center gap-2 pt-2 border-t">
-                                                    <span className="text-gray-500 text-sm">Linked to:</span>
-                                                    <Badge variant="outline" className="text-xs">{linkedFieldName}</Badge>
-                                                </div>
-                                            )}
                                             
                                             {/* Action buttons */}
                                             <div className="flex flex-wrap gap-2 pt-2 border-t">
-                                                {linkedFieldName && (
-                                                    <Button variant="outline" size="sm" onClick={() => navigate(createFieldDeepLink(test.field_id))} className="flex-1 min-w-0">
+                                                {canonicalFieldId && (
+                                                    <Button variant="outline" size="sm" onClick={() => navigate(createFieldDeepLink(canonicalFieldId))} className="flex-1 min-w-0">
                                                         <MapPin className="w-3 h-3 mr-1" /> 
                                                         <span className="truncate">Map</span>
                                                     </Button>
@@ -1493,6 +1534,24 @@ export default function SoilTestsTab() {
                 fieldsMap={fieldsMap}
                 sourceUploadMap={sourceUploadMap}
                 getSavedSoilDisplay={getSavedSoilDisplay}
+                formatLastUpdated={formatLastUpdated}
+                getContext={getContext}
+            />
+
+            <FieldSummaryDrawer
+                open={!!fieldSummary}
+                onOpenChange={(v) => {
+                    if (!v) setFieldSummary(null);
+                }}
+                fieldName={fieldSummary?.fieldName}
+                fieldId={fieldSummary?.fieldId}
+                soilTests={fieldSummary?.soilTests ?? []}
+                yieldRecords={fieldSummary?.yieldRecords ?? []}
+                onOpenMap={
+                    fieldSummary?.fieldId
+                        ? () => navigate(createFieldDeepLink(fieldSummary.fieldId))
+                        : undefined
+                }
                 formatLastUpdated={formatLastUpdated}
             />
 

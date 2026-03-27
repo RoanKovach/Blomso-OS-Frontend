@@ -28,6 +28,8 @@ export default function YieldTicketReview({
     onFinalize,
     onCancel,
     isSaving = false,
+    linkedFieldName = null,
+    extractedFieldSummary = null,
 }) {
     const handleFieldChange = (ticket, fieldName, value, isNumeric = false) => {
         let parsedValue = value;
@@ -56,6 +58,20 @@ export default function YieldTicketReview({
                             <p className="text-green-700">
                                 The AI found {tickets.length} ticket{tickets.length !== 1 ? "s" : ""}. Review and edit key values before continuing.
                             </p>
+                            {(linkedFieldName || extractedFieldSummary) && (
+                                <div className="mt-3 space-y-1 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                                    {linkedFieldName && (
+                                        <p>
+                                            <strong>Linked Field:</strong> {linkedFieldName}
+                                        </p>
+                                    )}
+                                    {extractedFieldSummary && (
+                                        <p className="text-green-800">
+                                            <strong>Extracted / document field:</strong> {extractedFieldSummary}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                         <Badge variant="secondary" className="text-lg">
                             {tickets.length} Ticket{tickets.length !== 1 ? "s" : ""}
