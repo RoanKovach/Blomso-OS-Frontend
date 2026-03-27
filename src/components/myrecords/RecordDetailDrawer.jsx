@@ -168,12 +168,6 @@ export default function RecordDetailDrawer({
                                         : "—"}
                                 </span>
                                 <span>Updated: {formatLastUpdated(record.updatedAt ?? record.createdAt)}</span>
-                                {yieldCtx?.canonicalFieldName && (
-                                    <span className="inline-flex items-center gap-1">
-                                        Linked field:{" "}
-                                        <Badge variant="outline">{yieldCtx.canonicalFieldName}</Badge>
-                                    </span>
-                                )}
                                 {yieldCtx?.sourceFieldLabel &&
                                     yieldCtx.sourceFieldLabel !== yieldCtx.displayFieldName && (
                                         <span>
