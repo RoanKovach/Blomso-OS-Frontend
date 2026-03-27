@@ -519,7 +519,7 @@ export default function SoilTestsTab() {
         if (!backendRecordsMode) return [];
 
         const soilRows = filteredSavedSoil.map((test) => {
-            const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
+            const { displayFieldName, displayCrop, displayAcres } = getSavedSoilDisplay(test);
             const sd = test.soil_data || {};
             const linkedFieldName = test.field_id ? fieldsMap.get(test.field_id) : null;
             return {
@@ -529,13 +529,22 @@ export default function SoilTestsTab() {
                 fieldName: displayFieldName,
                 linkedFieldName: linkedFieldName || "—",
                 crop: displayCrop ?? "",
+                acres: displayAcres ?? test.field_size_acres ?? null,
+                shi: test.soil_health_index ?? null,
                 recordDateRaw: test.test_date,
                 lastUpdatedRaw: test.updated_date,
                 ph: sd.ph ?? null,
                 organicMatter: sd.organic_matter ?? null,
+                nitrogen: sd.nitrogen ?? null,
                 phosphorus: sd.phosphorus ?? null,
                 potassium: sd.potassium ?? null,
+                calcium: sd.calcium ?? null,
+                magnesium: sd.magnesium ?? null,
+                sulfur: sd.sulfur ?? null,
                 cec: sd.cec ?? null,
+                zinc: sd.zinc ?? null,
+                copper: sd.copper ?? null,
+                iron: sd.iron ?? null,
             };
         });
 
@@ -558,6 +567,18 @@ export default function SoilTestsTab() {
             const moisture =
                 rec.moisture ?? rec.moisture_pct ?? rec.moisture_percent ?? rec.moisturePct ?? null;
             const testWeight = rec.test_weight ?? rec.testWeight ?? null;
+            const truckVehicle =
+                rec.truck ??
+                rec.vehicle ??
+                rec.truck_id ??
+                rec.truck_number ??
+                rec.truckNumber ??
+                null;
+            const grossWeight = rec.gross_weight ?? rec.grossWeight ?? null;
+            const tareWeight = rec.tare_weight ?? rec.tareWeight ?? null;
+            const netWeight = rec.net_weight ?? rec.netWeight ?? null;
+            const grossBushels = rec.gross_bushels ?? rec.grossBushels ?? null;
+            const shrink = rec.shrink ?? rec.shrink_percent ?? rec.shrinkPct ?? null;
             return {
                 id: rec.id,
                 rowKind: "yield",
@@ -567,10 +588,16 @@ export default function SoilTestsTab() {
                 recordDateRaw: rec.ticket_date ?? rec.ticketDate,
                 lastUpdatedRaw: rec.updatedAt ?? rec.createdAt,
                 ticketNumber: rec.ticket_number ?? rec.ticketNumber ?? null,
-                netBushels: netBushelsValue,
-                pricePerBu: priceValue,
+                truckVehicle,
+                grossWeight,
+                tareWeight,
+                netWeight,
                 moisture,
                 testWeight,
+                grossBushels,
+                shrink,
+                netBushels: netBushelsValue,
+                pricePerBu: priceValue,
             };
         });
 

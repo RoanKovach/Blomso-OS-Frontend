@@ -18,6 +18,37 @@ import {
     getDefaultVisibleKeys,
 } from "./dataSheetConfig";
 
+/** Sort/export/render as numeric when present */
+const NUMERIC_ROW_KEYS = new Set([
+    "ph",
+    "organicMatter",
+    "nitrogen",
+    "phosphorus",
+    "potassium",
+    "calcium",
+    "magnesium",
+    "sulfur",
+    "cec",
+    "zinc",
+    "copper",
+    "iron",
+    "acres",
+    "shi",
+    "grossWeight",
+    "tareWeight",
+    "netWeight",
+    "moisture",
+    "testWeight",
+    "grossBushels",
+    "shrink",
+    "netBushels",
+    "pricePerBu",
+    "latestPh",
+    "latestP",
+    "latestK",
+    "totalNetBushels",
+]);
+
 function displayRecordDate(raw) {
     if (raw == null || raw === "") return "—";
     return formatDateOnlySafe(raw, "MMM d, yyyy") || "—";
@@ -83,29 +114,17 @@ function cellForExport(row, key) {
             return displayRecordDate(row.latestSoilDate) === "—" ? "" : displayRecordDate(row.latestSoilDate);
         case "latestYieldDate":
             return displayRecordDate(row.latestYieldDate) === "—" ? "" : displayRecordDate(row.latestYieldDate);
-        case "ph":
-        case "organicMatter":
-        case "phosphorus":
-        case "potassium":
-        case "cec":
-        case "netBushels":
-        case "pricePerBu":
-        case "moisture":
-        case "testWeight":
-        case "latestPh":
-        case "latestP":
-        case "latestK":
-        case "acres":
-        case "totalNetBushels":
-            return row[key] === null || row[key] === undefined ? "" : String(row[key]);
-        case "soilTestCount":
-        case "yieldTicketCount":
-            return row[key] === null || row[key] === undefined ? "" : String(row[key]);
         case "ticketNumber":
             return row.ticketNumber === null || row.ticketNumber === undefined ? "" : String(row.ticketNumber);
         case "id":
             return row.id == null ? "" : String(row.id);
         default:
+            if (NUMERIC_ROW_KEYS.has(key)) {
+                return row[key] === null || row[key] === undefined ? "" : String(row[key]);
+            }
+            if (key === "soilTestCount" || key === "yieldTicketCount") {
+                return row[key] === null || row[key] === undefined ? "" : String(row[key]);
+            }
             return row[key] === null || row[key] === undefined ? "" : String(row[key]);
     }
 }
@@ -120,29 +139,17 @@ function renderCell(row, key) {
             return displayRecordDate(row.latestSoilDate);
         case "latestYieldDate":
             return displayRecordDate(row.latestYieldDate);
-        case "ph":
-        case "organicMatter":
-        case "phosphorus":
-        case "potassium":
-        case "cec":
-        case "netBushels":
-        case "pricePerBu":
-        case "moisture":
-        case "testWeight":
-        case "latestPh":
-        case "latestP":
-        case "latestK":
-        case "acres":
-        case "totalNetBushels":
-            return displayNum(row[key]);
-        case "soilTestCount":
-        case "yieldTicketCount":
-            return row[key] != null ? String(row[key]) : "—";
         case "ticketNumber":
             return row.ticketNumber != null && row.ticketNumber !== "" ? String(row.ticketNumber) : "—";
         case "id":
             return row.id != null && row.id !== "" ? String(row.id) : "—";
         default:
+            if (NUMERIC_ROW_KEYS.has(key)) {
+                return displayNum(row[key]);
+            }
+            if (key === "soilTestCount" || key === "yieldTicketCount") {
+                return row[key] != null ? String(row[key]) : "—";
+            }
             return row[key] == null || row[key] === "" ? "—" : String(row[key]);
     }
 }
