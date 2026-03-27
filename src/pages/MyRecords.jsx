@@ -17,7 +17,7 @@ export default function MyRecordsPage() {
                             My Records
                         </h1>
                         <p className="text-green-700 text-lg">
-                            View, manage, and export all your farm data.
+                            A unified Workbench surface for uploads, normalized records, and field-linked history.
                         </p>
                     </div>
                 </div>
@@ -26,7 +26,7 @@ export default function MyRecordsPage() {
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="soil_tests">
                             <Beaker className="w-4 h-4 mr-2" />
-                            Soil Tests
+                            Workbench Records
                         </TabsTrigger>
                         <TabsTrigger value="practices">
                             <Tractor className="w-4 h-4 mr-2" />

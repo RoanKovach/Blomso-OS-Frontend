@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Eye, Edit, Trash2, Download, AlertTriangle, List, Grid3X3, Info, MapPin } from "lucide-react";
 import { format, formatDistanceToNow, isValid, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -46,6 +47,12 @@ export default function SoilTestsTab() {
     /** Upload records (soil_upload) for status-driven table; when backendRecordsMode we also have normalized in tests or separate list */
     const [uploadRecords, setUploadRecords] = useState([]);
     const [extractingId, setExtractingId] = useState(null);
+    const [recordFilters, setRecordFilters] = useState({
+        field: "all",
+        family: "all",
+        crop: "all",
+        status: "all",
+    });
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -399,6 +406,93 @@ export default function SoilTestsTab() {
         [sourceUploadMap]
     );
 
+    const getUploadDisplayStatus = useCallback((rec) => {
+        const rawStatus = rec.extractionStatus ?? rec.status ?? 'uploaded';
+        const hasSavedNormalized = tests.some((t) => t.sourceUploadId === rec.id);
+        return hasSavedNormalized && rawStatus === 'needs_review' ? 'saved' : rawStatus;
+    }, [tests]);
+
+    const filterOptions = useMemo(() => {
+        if (!backendRecordsMode) {
+            return { fields: [], crops: [], statuses: [] };
+        }
+
+        const fields = new Set();
+        const crops = new Set();
+        const statuses = new Set();
+
+        uploadRecords.forEach((rec) => {
+            const ctx = getContext(rec);
+            const fieldName = rec.linkedFieldName || rec.field_name || rec.enteredFieldLabel || ctx?.field_name;
+            const crop = ctx?.intended_crop;
+            const status = getUploadDisplayStatus(rec);
+            if (fieldName) fields.add(fieldName);
+            if (crop) crops.add(crop);
+            if (status) statuses.add(status);
+        });
+
+        tests.forEach((test) => {
+            const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
+            if (displayFieldName) fields.add(displayFieldName);
+            if (displayCrop) crops.add(displayCrop);
+        });
+
+        yieldRecords.forEach((rec) => {
+            const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
+            const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel;
+            const crop = rec.crop ?? rec.crop_type ?? null;
+            if (fieldName) fields.add(fieldName);
+            if (crop) crops.add(crop);
+        });
+
+        return {
+            fields: Array.from(fields).sort((a, b) => String(a).localeCompare(String(b))),
+            crops: Array.from(crops).sort((a, b) => String(a).localeCompare(String(b))),
+            statuses: Array.from(statuses).sort((a, b) => String(a).localeCompare(String(b))),
+        };
+    }, [backendRecordsMode, uploadRecords, tests, yieldRecords, sourceUploadMap, getSavedSoilDisplay, getUploadDisplayStatus]);
+
+    const filteredUploadRecords = useMemo(() => {
+        if (!backendRecordsMode) return uploadRecords;
+        return uploadRecords.filter((rec) => {
+            const ctx = getContext(rec);
+            const displayFieldName = rec.linkedFieldName || rec.field_name || rec.enteredFieldLabel || ctx?.field_name || '';
+            const displayCrop = ctx?.intended_crop || '';
+            const displayStatus = getUploadDisplayStatus(rec);
+            const family = rec.documentFamily === 'yield_scale_ticket' ? 'yield' : 'soil';
+
+            if (recordFilters.field !== "all" && displayFieldName !== recordFilters.field) return false;
+            if (recordFilters.crop !== "all" && displayCrop !== recordFilters.crop) return false;
+            if (recordFilters.status !== "all" && displayStatus !== recordFilters.status) return false;
+            if (recordFilters.family !== "all" && family !== recordFilters.family) return false;
+            return true;
+        });
+    }, [backendRecordsMode, uploadRecords, recordFilters, getUploadDisplayStatus]);
+
+    const filteredSavedSoil = useMemo(() => {
+        if (!backendRecordsMode) return tests;
+        return tests.filter((test) => {
+            const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
+            if (recordFilters.family === "yield") return false;
+            if (recordFilters.field !== "all" && displayFieldName !== recordFilters.field) return false;
+            if (recordFilters.crop !== "all" && (displayCrop || "") !== recordFilters.crop) return false;
+            return true;
+        });
+    }, [backendRecordsMode, tests, recordFilters, getSavedSoilDisplay]);
+
+    const filteredSavedYield = useMemo(() => {
+        if (!backendRecordsMode) return yieldRecords;
+        return yieldRecords.filter((rec) => {
+            const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
+            const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || '';
+            const crop = rec.crop ?? rec.crop_type ?? '';
+            if (recordFilters.family === "soil") return false;
+            if (recordFilters.field !== "all" && fieldName !== recordFilters.field) return false;
+            if (recordFilters.crop !== "all" && crop !== recordFilters.crop) return false;
+            return true;
+        });
+    }, [backendRecordsMode, yieldRecords, sourceUploadMap, recordFilters]);
+
     const handleExport = async () => {
         setIsExporting(true);
         try {
@@ -491,35 +585,35 @@ export default function SoilTestsTab() {
                 </Alert>
             )}
             
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex items-center gap-4">
-                    <h3 className="text-lg font-semibold text-green-900">
-                        {backendRecordsMode ? "Upload Records" : "Soil Test Records"}
-                    </h3>
-                    {!backendRecordsMode && (
-                        <Tabs value={viewMode} onValueChange={setViewMode} className="w-auto">
-                            <TabsList>
-                                <TabsTrigger value="list" className="flex items-center gap-2">
-                                    <List className="w-4 h-4" />
-                                    List
-                                </TabsTrigger>
-                                <TabsTrigger 
-                                    value="grid" 
-                                    className="flex items-center gap-2"
-                                >
-                                    <Grid3X3 className="w-4 h-4" />
-                                    Grid
-                                </TabsTrigger>
-                            </TabsList>
-                        </Tabs>
-                    )}
-                </div>
-                {!backendRecordsMode && (
+            <div className="space-y-3">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <h3 className="text-lg font-semibold text-green-900">
+                            {backendRecordsMode ? "Workbench Records" : "Records"}
+                        </h3>
+                        {!backendRecordsMode && (
+                            <Tabs value={viewMode} onValueChange={setViewMode} className="w-auto">
+                                <TabsList>
+                                    <TabsTrigger value="list" className="flex items-center gap-2">
+                                        <List className="w-4 h-4" />
+                                        List
+                                    </TabsTrigger>
+                                    <TabsTrigger
+                                        value="grid"
+                                        className="flex items-center gap-2"
+                                    >
+                                        <Grid3X3 className="w-4 h-4" />
+                                        Grid
+                                    </TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                        )}
+                    </div>
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button 
-                                    onClick={handleExport} 
+                                <Button
+                                    onClick={handleExport}
                                     disabled={isExporting}
                                     variant="default"
                                 >
@@ -527,33 +621,85 @@ export default function SoilTestsTab() {
                                     {isExporting ? "Exporting..." : "Export CSV"}
                                 </Button>
                             </TooltipTrigger>
-                             {isDemo && (
+                            {isDemo && (
                                 <TooltipContent>
                                     <p>Exporting as CSV is a premium feature.</p>
                                 </TooltipContent>
                             )}
                         </Tooltip>
                     </TooltipProvider>
+                </div>
+
+                {backendRecordsMode && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <Select value={recordFilters.field} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, field: value }))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Field" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All fields</SelectItem>
+                                {filterOptions.fields.map((fieldName) => (
+                                    <SelectItem key={fieldName} value={fieldName}>{fieldName}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select value={recordFilters.family} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, family: value }))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Family" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All families</SelectItem>
+                                <SelectItem value="soil">Soil tests</SelectItem>
+                                <SelectItem value="yield">Yield tickets</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select value={recordFilters.crop} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, crop: value }))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Crop" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All crops</SelectItem>
+                                {filterOptions.crops.map((crop) => (
+                                    <SelectItem key={crop} value={crop}>{crop}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select value={recordFilters.status} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, status: value }))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All statuses</SelectItem>
+                                {filterOptions.statuses.map((status) => (
+                                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 )}
             </div>
 
             {!backendRecordsMode && tests.length === 0 ? (
                 <Card className="text-center p-8">
                     <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                    <h3 className="text-lg font-semibold text-gray-800">No Soil Tests Found</h3>
-                    <p className="text-gray-600">You haven't uploaded any soil tests yet.</p>
+                    <h3 className="text-lg font-semibold text-gray-800">No Records Yet</h3>
+                    <p className="text-gray-600">Upload a document to start building your Workbench records.</p>
                     <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-4 bg-green-600 hover:bg-green-700">
-                        Upload Your First Test
+                        Upload Your First Document
                     </Button>
                 </Card>
             ) : backendRecordsMode ? (
                 <>
                     {/* Upload records: backend status and extraction status drive UI */}
                     <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-green-900">Uploads</h3>
-                        {uploadRecords.length === 0 ? (
+                        <h3 className="text-lg font-semibold text-green-900">Uploads / Documents</h3>
+                        {filteredUploadRecords.length === 0 ? (
                             <Card className="text-center p-6">
-                                <p className="text-gray-600">No uploads yet. Upload a PDF to see it here.</p>
+                                <p className="text-gray-600">
+                                    {uploadRecords.length === 0
+                                        ? 'No uploads yet. Upload a PDF to see it here.'
+                                        : 'No uploads match the selected filters.'}
+                                </p>
                                 <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-3 bg-green-600 hover:bg-green-700">Upload a File</Button>
                             </Card>
                         ) : (
@@ -572,16 +718,10 @@ export default function SoilTestsTab() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {uploadRecords.map((rec) => {
+                                        {filteredUploadRecords.map((rec) => {
                                             const ctx = getContext(rec);
                                             const rawStatus = rec.extractionStatus ?? rec.status ?? 'uploaded';
-                                            const hasSavedNormalized = tests.some(
-                                                (t) => t.sourceUploadId === rec.id
-                                            );
-                                            const displayStatus =
-                                                hasSavedNormalized && rawStatus === 'needs_review'
-                                                    ? 'saved'
-                                                    : rawStatus;
+                                            const displayStatus = getUploadDisplayStatus(rec);
                                             return (
                                                 <TableRow key={rec.id} className="hover:bg-green-50/50">
                                                     <TableCell className="font-medium">{rec.filename || '—'}</TableCell>
@@ -660,11 +800,11 @@ export default function SoilTestsTab() {
                         )}
                     </div>
                     {/* Saved records (normalized soil + yield) */}
-                    {(tests.length > 0 || yieldRecords.length > 0) && (
+                    {(filteredSavedSoil.length > 0 || filteredSavedYield.length > 0) ? (
                         <div className="space-y-6 mt-8">
-                            <h3 className="text-lg font-semibold text-green-900">Saved records</h3>
+                            <h3 className="text-lg font-semibold text-green-900">Saved Records</h3>
 
-                            {tests.length > 0 && (
+                            {filteredSavedSoil.length > 0 && (
                                 <div className="space-y-3">
                                     <h4 className="text-md font-semibold text-green-800">Saved Soil Tests</h4>
                                     <div className="overflow-x-auto border rounded-lg bg-white">
@@ -682,7 +822,7 @@ export default function SoilTestsTab() {
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {tests.map(test => {
+                                                {filteredSavedSoil.map(test => {
                                                     const { displayFieldName, displayCrop, displayAcres } = getSavedSoilDisplay(test);
                                                     const linkedFieldName = fieldsMap.get(test.field_id);
                                                     const testDateStr = formatDateOnlySafe(test.test_date) || 'N/A';
@@ -743,7 +883,7 @@ export default function SoilTestsTab() {
                                 </div>
                             )}
 
-                            {yieldRecords.length > 0 && (
+                            {filteredSavedYield.length > 0 && (
                                 <div className="space-y-3">
                                     <h4 className="text-md font-semibold text-green-800">Saved Yield Tickets</h4>
                                     <div className="overflow-x-auto border rounded-lg bg-white">
@@ -761,7 +901,7 @@ export default function SoilTestsTab() {
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {yieldRecords.map((rec) => {
+                                                {filteredSavedYield.map((rec) => {
                                                     const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
                                                     const ticketNumber = rec.ticket_number ?? rec.ticketNumber ?? '—';
                                                     const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || '—';
@@ -816,6 +956,14 @@ export default function SoilTestsTab() {
                                 </div>
                             )}
                         </div>
+                    ) : (
+                        <Card className="text-center p-6 mt-8">
+                            <p className="text-gray-600">
+                                {(tests.length > 0 || yieldRecords.length > 0)
+                                    ? "No saved records match the selected filters."
+                                    : "Uploads can be reviewed and normalized into saved records here once extraction is complete."}
+                            </p>
+                        </Card>
                     )}
                 </>
             ) : (
