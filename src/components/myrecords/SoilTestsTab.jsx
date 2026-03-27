@@ -25,6 +25,11 @@ import EditSoilTestModal from "./EditSoilTestModal";
 import GridView from "./GridView";
 import ExpandableRow from "./ExpandableRow";
 import SavedRecordsDataSheet from "./SavedRecordsDataSheet";
+import {
+    ROW_MODEL_RECORD_LEDGER,
+    ROW_MODEL_SOIL_TESTS,
+    ROW_MODEL_YIELD_TICKETS,
+} from "./dataSheetConfig";
 import RecordDetailDrawer from "./RecordDetailDrawer";
 import { blobFromExportSoilTestsResponse } from "./exportSoilTestsResponse";
 import { formatDateOnlySafe } from "./dateUtils";
@@ -58,6 +63,8 @@ export default function SoilTestsTab() {
     });
     /** Signed-in Saved Records only: Standard tables vs Data Sheet modeling view */
     const [savedRecordsViewMode, setSavedRecordsViewMode] = useState("standard");
+    /** Data Sheet: what one row means (ledger vs family-specific projection) */
+    const [dataSheetRowModel, setDataSheetRowModel] = useState(ROW_MODEL_RECORD_LEDGER);
     const savedRecordsDataSheetRef = useRef(null);
     const [recordDetail, setRecordDetail] = useState(null);
     const navigate = useNavigate();
@@ -502,6 +509,14 @@ export default function SoilTestsTab() {
 
     const dataSheetRows = useMemo(() => {
         if (!backendRecordsMode) return [];
+
+        const sourceUploadDisplay = (uploadId) => {
+            if (uploadId == null || uploadId === "") return "";
+            const u = sourceUploadMap.get(uploadId);
+            if (!u) return String(uploadId);
+            return u.filename || u.originalFilename || String(uploadId);
+        };
+
         const soilRows = filteredSavedSoil.map((test) => {
             const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
             const sd = test.soil_data || {};
@@ -514,8 +529,11 @@ export default function SoilTestsTab() {
                 recordDateRaw: test.test_date,
                 lastUpdatedRaw: test.updated_date,
                 sourceUploadId: test.sourceUploadId,
+                sourceUploadDisplay: sourceUploadDisplay(test.sourceUploadId),
+                shi: test.soil_health_index ?? null,
                 ph: sd.ph ?? null,
                 organicMatter: sd.organic_matter ?? null,
+                nitrogen: sd.nitrogen ?? null,
                 phosphorus: sd.phosphorus ?? null,
                 potassium: sd.potassium ?? null,
                 ticketNumber: null,
@@ -548,8 +566,11 @@ export default function SoilTestsTab() {
                 recordDateRaw: rec.ticket_date ?? rec.ticketDate,
                 lastUpdatedRaw: rec.updatedAt ?? rec.createdAt,
                 sourceUploadId: rec.sourceUploadId,
+                sourceUploadDisplay: sourceUploadDisplay(rec.sourceUploadId),
+                shi: null,
                 ph: null,
                 organicMatter: null,
+                nitrogen: null,
                 phosphorus: null,
                 potassium: null,
                 ticketNumber: rec.ticket_number ?? rec.ticketNumber ?? null,
@@ -557,8 +578,18 @@ export default function SoilTestsTab() {
                 pricePerBu: priceValue,
             };
         });
+
+        if (dataSheetRowModel === ROW_MODEL_SOIL_TESTS) return soilRows;
+        if (dataSheetRowModel === ROW_MODEL_YIELD_TICKETS) return yieldRows;
         return [...soilRows, ...yieldRows];
-    }, [backendRecordsMode, filteredSavedSoil, filteredSavedYield, getSavedSoilDisplay, sourceUploadMap]);
+    }, [
+        backendRecordsMode,
+        dataSheetRowModel,
+        filteredSavedSoil,
+        filteredSavedYield,
+        getSavedSoilDisplay,
+        sourceUploadMap,
+    ]);
 
     const openSoilView = useCallback(
         (test) => {
@@ -932,6 +963,8 @@ export default function SoilTestsTab() {
                                         <SavedRecordsDataSheet
                                             ref={savedRecordsDataSheetRef}
                                             rows={dataSheetRows}
+                                            rowModel={dataSheetRowModel}
+                                            onRowModelChange={setDataSheetRowModel}
                                             onViewRecord={openFromDataSheetRow}
                                         />
                                     </div>

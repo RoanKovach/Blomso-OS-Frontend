@@ -7,17 +7,34 @@ import { format, isValid, parseISO } from "date-fns";
 import { formatDateOnlySafe } from "./dateUtils";
 import { downloadCsv } from "./csvExport";
 import { toast } from "sonner";
+import {
+    ROW_MODEL_RECORD_LEDGER,
+    ROW_MODEL_SOIL_TESTS,
+    ROW_MODEL_YIELD_TICKETS,
+    ROW_MODEL_FIELD_SUMMARY,
+    ROW_MODEL_FIELD_SEASON,
+    COLUMN_PRESET_FARMER,
+    COLUMN_PRESET_MODELING,
+    COLUMN_PRESET_AGRONOMIST_SOIL,
+    COLUMN_PRESET_AGRONOMIST_YIELD,
+    DEFAULT_COLUMN_PRESET,
+    PRESET_COLUMN_KEYS,
+} from "./dataSheetConfig";
 
 /** Full registry (sortKey aligns with row keys on dataSheetRows) */
 const COLUMN_REGISTRY = [
+    { key: "id", label: "Record id", sortKey: "id" },
     { key: "family", label: "Family", sortKey: "family" },
     { key: "fieldName", label: "Field", sortKey: "fieldName" },
     { key: "crop", label: "Crop", sortKey: "crop" },
     { key: "recordDateRaw", label: "Record Date", sortKey: "recordDateRaw" },
     { key: "lastUpdatedRaw", label: "Last Updated", sortKey: "lastUpdatedRaw" },
     { key: "status", label: "Status", sortKey: "status" },
+    { key: "sourceUploadDisplay", label: "Source Upload", sortKey: "sourceUploadDisplay" },
+    { key: "shi", label: "SHI", sortKey: "shi" },
     { key: "ph", label: "pH", sortKey: "ph" },
     { key: "organicMatter", label: "OM %", sortKey: "organicMatter" },
+    { key: "nitrogen", label: "N", sortKey: "nitrogen" },
     { key: "phosphorus", label: "P (ppm)", sortKey: "phosphorus" },
     { key: "potassium", label: "K (ppm)", sortKey: "potassium" },
     { key: "ticketNumber", label: "Ticket #", sortKey: "ticketNumber" },
@@ -26,44 +43,6 @@ const COLUMN_REGISTRY = [
 ];
 
 const COL_BY_KEY = Object.fromEntries(COLUMN_REGISTRY.map((c) => [c.key, c]));
-
-/** Default v2.1: 11 columns — no Status, no OM */
-const PRESET_MODELING_KEYS = [
-    "family",
-    "fieldName",
-    "crop",
-    "recordDateRaw",
-    "lastUpdatedRaw",
-    "ph",
-    "phosphorus",
-    "potassium",
-    "ticketNumber",
-    "netBushels",
-    "pricePerBu",
-];
-
-const PRESET_SOIL_KEYS = [
-    "family",
-    "fieldName",
-    "crop",
-    "recordDateRaw",
-    "lastUpdatedRaw",
-    "ph",
-    "organicMatter",
-    "phosphorus",
-    "potassium",
-];
-
-const PRESET_YIELD_KEYS = [
-    "family",
-    "fieldName",
-    "crop",
-    "recordDateRaw",
-    "lastUpdatedRaw",
-    "ticketNumber",
-    "netBushels",
-    "pricePerBu",
-];
 
 function keysToColumns(keys) {
     return keys.map((k) => COL_BY_KEY[k]).filter(Boolean);
@@ -127,15 +106,21 @@ function cellForExport(row, key) {
             return displayLastUpdated(row.lastUpdatedRaw) === "—" ? "" : displayLastUpdated(row.lastUpdatedRaw);
         case "ph":
         case "organicMatter":
+        case "nitrogen":
         case "phosphorus":
         case "potassium":
         case "netBushels":
         case "pricePerBu":
+        case "shi":
             return row[key] === null || row[key] === undefined ? "" : String(row[key]);
         case "ticketNumber":
             return row.ticketNumber === null || row.ticketNumber === undefined ? "" : String(row.ticketNumber);
         case "status":
             return row.status == null ? "" : String(row.status);
+        case "id":
+            return row.id == null ? "" : String(row.id);
+        case "sourceUploadDisplay":
+            return row.sourceUploadDisplay == null ? "" : String(row.sourceUploadDisplay);
         default:
             return row[key] === null || row[key] === undefined ? "" : String(row[key]);
     }
@@ -149,29 +134,39 @@ function renderCell(row, key) {
             return displayLastUpdated(row.lastUpdatedRaw);
         case "ph":
         case "organicMatter":
+        case "nitrogen":
         case "phosphorus":
         case "potassium":
         case "netBushels":
         case "pricePerBu":
+        case "shi":
             return displayNum(row[key]);
         case "ticketNumber":
             return row.ticketNumber != null && row.ticketNumber !== "" ? String(row.ticketNumber) : "—";
         case "status":
             return row.status ?? "—";
+        case "id":
+            return row.id != null && row.id !== "" ? String(row.id) : "—";
+        case "sourceUploadDisplay":
+            return row.sourceUploadDisplay != null && row.sourceUploadDisplay !== ""
+                ? String(row.sourceUploadDisplay)
+                : "—";
         default:
             return row[key] == null || row[key] === "" ? "—" : String(row[key]);
     }
 }
 
-const SavedRecordsDataSheet = forwardRef(function SavedRecordsDataSheet({ rows = [], onViewRecord }, ref) {
-    const [preset, setPreset] = useState("modeling");
+const SavedRecordsDataSheet = forwardRef(function SavedRecordsDataSheet(
+    { rows = [], onViewRecord, rowModel = ROW_MODEL_RECORD_LEDGER, onRowModelChange },
+    ref
+) {
+    const [preset, setPreset] = useState(DEFAULT_COLUMN_PRESET);
     const [sortKey, setSortKey] = useState("recordDateRaw");
     const [sortDir, setSortDir] = useState("desc");
 
     const visibleColumns = useMemo(() => {
-        if (preset === "soil") return keysToColumns(PRESET_SOIL_KEYS);
-        if (preset === "yield") return keysToColumns(PRESET_YIELD_KEYS);
-        return keysToColumns(PRESET_MODELING_KEYS);
+        const keys = PRESET_COLUMN_KEYS[preset] ?? PRESET_COLUMN_KEYS[DEFAULT_COLUMN_PRESET];
+        return keysToColumns(keys);
     }, [preset]);
 
     useEffect(() => {
@@ -212,11 +207,13 @@ const SavedRecordsDataSheet = forwardRef(function SavedRecordsDataSheet({ rows =
                 const keys = visibleColumns.map((c) => c.key);
                 const dataRows = sortedRows.map((row) => keys.map((k) => cellForExport(row, k)));
                 const stamp = new Date().toISOString().split("T")[0];
-                downloadCsv(`saved-records-datasheet-${stamp}.csv`, headers, dataRows);
+                const safeModel = String(rowModel || ROW_MODEL_RECORD_LEDGER).replace(/[^a-z0-9_-]/gi, "_");
+                const safePreset = String(preset || DEFAULT_COLUMN_PRESET).replace(/[^a-z0-9_-]/gi, "_");
+                downloadCsv(`saved-records-${safeModel}-${safePreset}-${stamp}.csv`, headers, dataRows);
                 toast.success("Export complete – downloading file…");
             },
         }),
-        [sortedRows, visibleColumns]
+        [sortedRows, visibleColumns, rowModel, preset]
     );
 
     if (!rows.length) {
@@ -229,18 +226,40 @@ const SavedRecordsDataSheet = forwardRef(function SavedRecordsDataSheet({ rows =
 
     return (
         <div className="hidden md:block space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-gray-600">Column preset</span>
-                <Select value={preset} onValueChange={setPreset}>
-                    <SelectTrigger className="h-9 w-[200px]">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="modeling">Modeling Basic</SelectItem>
-                        <SelectItem value="soil">Soil Only</SelectItem>
-                        <SelectItem value="yield">Yield Only</SelectItem>
-                    </SelectContent>
-                </Select>
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-gray-600">Row model</span>
+                    <Select value={rowModel} onValueChange={(v) => onRowModelChange?.(v)}>
+                        <SelectTrigger className="h-9 w-[200px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={ROW_MODEL_RECORD_LEDGER}>Record Ledger</SelectItem>
+                            <SelectItem value={ROW_MODEL_SOIL_TESTS}>Soil Tests</SelectItem>
+                            <SelectItem value={ROW_MODEL_YIELD_TICKETS}>Yield Tickets</SelectItem>
+                            <SelectItem value={ROW_MODEL_FIELD_SUMMARY} disabled>
+                                Field Summary (coming soon)
+                            </SelectItem>
+                            <SelectItem value={ROW_MODEL_FIELD_SEASON} disabled>
+                                Field-Season (coming soon)
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-gray-600">Column preset</span>
+                    <Select value={preset} onValueChange={setPreset}>
+                        <SelectTrigger className="h-9 w-[220px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={COLUMN_PRESET_FARMER}>Farmer Summary</SelectItem>
+                            <SelectItem value={COLUMN_PRESET_MODELING}>Modeling Basic</SelectItem>
+                            <SelectItem value={COLUMN_PRESET_AGRONOMIST_SOIL}>Agronomist Soil</SelectItem>
+                            <SelectItem value={COLUMN_PRESET_AGRONOMIST_YIELD}>Agronomist Yield</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
             <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
                 <Table className="text-sm">
