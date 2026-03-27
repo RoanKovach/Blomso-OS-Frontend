@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { SoilTest } from "@/api/entities";
 import { Field } from "@/api/entities"; // Import Field entity
 import { User } from "@/api/entities";
@@ -24,6 +24,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import EditSoilTestModal from "./EditSoilTestModal";
 import GridView from "./GridView";
 import ExpandableRow from "./ExpandableRow";
+import SavedRecordsDataSheet from "./SavedRecordsDataSheet";
 import { formatDateOnlySafe } from "./dateUtils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -53,6 +54,9 @@ export default function SoilTestsTab() {
         crop: "all",
         status: "all",
     });
+    /** Signed-in Saved Records only: Standard tables vs Data Sheet modeling view */
+    const [savedRecordsViewMode, setSavedRecordsViewMode] = useState("standard");
+    const savedRecordsDataSheetRef = useRef(null);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -493,7 +497,76 @@ export default function SoilTestsTab() {
         });
     }, [backendRecordsMode, yieldRecords, sourceUploadMap, recordFilters]);
 
+    const dataSheetRows = useMemo(() => {
+        if (!backendRecordsMode) return [];
+        const soilRows = filteredSavedSoil.map((test) => {
+            const { displayFieldName, displayCrop } = getSavedSoilDisplay(test);
+            const sd = test.soil_data || {};
+            return {
+                id: test.id,
+                family: "Soil Test",
+                status: "saved",
+                fieldName: displayFieldName,
+                crop: displayCrop ?? "",
+                recordDateRaw: test.test_date,
+                lastUpdatedRaw: test.updated_date,
+                sourceUploadId: test.sourceUploadId,
+                ph: sd.ph ?? null,
+                organicMatter: sd.organic_matter ?? null,
+                phosphorus: sd.phosphorus ?? null,
+                potassium: sd.potassium ?? null,
+                ticketNumber: null,
+                netBushels: null,
+                pricePerBu: null,
+            };
+        });
+        const yieldRows = filteredSavedYield.map((rec) => {
+            const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
+            const fieldName = upload?.linkedFieldName || rec.field_name || upload?.enteredFieldLabel || "—";
+            const cropRaw = rec.crop ?? rec.crop_type ?? "—";
+            const crop =
+                cropRaw && cropRaw !== "—"
+                    ? cropRaw.charAt(0).toUpperCase() + cropRaw.slice(1).toLowerCase()
+                    : cropRaw;
+            const netBushelsValue =
+                rec.net_bushels ??
+                rec.netBushels ??
+                rec.quantity_bushels ??
+                rec.quantityBushels ??
+                null;
+            const priceValue =
+                rec.price_per_bu ?? rec.pricePerBushel ?? rec.price_per_bushel ?? null;
+            return {
+                id: rec.id,
+                family: "Yield Ticket",
+                status: "saved",
+                fieldName,
+                crop: crop === "—" ? "" : crop,
+                recordDateRaw: rec.ticket_date ?? rec.ticketDate,
+                lastUpdatedRaw: rec.updatedAt ?? rec.createdAt,
+                sourceUploadId: rec.sourceUploadId,
+                ph: null,
+                organicMatter: null,
+                phosphorus: null,
+                potassium: null,
+                ticketNumber: rec.ticket_number ?? rec.ticketNumber ?? null,
+                netBushels: netBushelsValue,
+                pricePerBu: priceValue,
+            };
+        });
+        return [...soilRows, ...yieldRows];
+    }, [backendRecordsMode, filteredSavedSoil, filteredSavedYield, getSavedSoilDisplay, sourceUploadMap]);
+
     const handleExport = async () => {
+        if (backendRecordsMode && savedRecordsViewMode === "datasheet" && savedRecordsDataSheetRef.current) {
+            setIsExporting(true);
+            try {
+                savedRecordsDataSheetRef.current.exportCsv();
+            } finally {
+                setIsExporting(false);
+            }
+            return;
+        }
         setIsExporting(true);
         try {
             const response = await exportSoilTests();
@@ -802,8 +875,38 @@ export default function SoilTestsTab() {
                     {/* Saved records (normalized soil + yield) */}
                     {(filteredSavedSoil.length > 0 || filteredSavedYield.length > 0) ? (
                         <div className="space-y-6 mt-8">
-                            <h3 className="text-lg font-semibold text-green-900">Saved Records</h3>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="space-y-1">
+                                    <h3 className="text-lg font-semibold text-green-900">Saved Records</h3>
+                                    {savedRecordsViewMode === "datasheet" && (
+                                        <p className="text-sm text-green-800/90">
+                                            Use the <strong>Family</strong> filter above to show all families, soil tests only, or yield tickets only.
+                                        </p>
+                                    )}
+                                </div>
+                                <Tabs
+                                    value={savedRecordsViewMode}
+                                    onValueChange={setSavedRecordsViewMode}
+                                    className="w-full sm:w-auto"
+                                >
+                                    <TabsList className="grid w-full grid-cols-2 sm:w-auto">
+                                        <TabsTrigger value="standard">Standard</TabsTrigger>
+                                        <TabsTrigger value="datasheet">Data Sheet</TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
+                            </div>
 
+                            {savedRecordsViewMode === "datasheet" ? (
+                                <>
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950 md:hidden">
+                                        Data Sheet is optimized for desktop. Switch to Standard or use a wider screen for the full spreadsheet.
+                                    </div>
+                                    <div className="hidden md:block">
+                                        <SavedRecordsDataSheet ref={savedRecordsDataSheetRef} rows={dataSheetRows} />
+                                    </div>
+                                </>
+                            ) : (
+                                <>
                             {filteredSavedSoil.length > 0 && (
                                 <div className="space-y-3">
                                     <h4 className="text-md font-semibold text-green-800">Saved Soil Tests</h4>
@@ -954,6 +1057,8 @@ export default function SoilTestsTab() {
                                         </Table>
                                     </div>
                                 </div>
+                            )}
+                                </>
                             )}
                         </div>
                     ) : (
