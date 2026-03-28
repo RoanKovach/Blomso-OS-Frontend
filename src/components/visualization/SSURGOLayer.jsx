@@ -1,103 +1,142 @@
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import maplibregl from "maplibre-gl";
+import { getSsurgoData } from "@/api/functions";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { GeoJSON } from 'react-leaflet';
-import { getSsurgoData } from '@/api/functions';
+const SSURGO_SOURCE = "ssurgo-soil";
+const SSURGO_FILL = "ssurgo-soil-fill";
+const SSURGO_LINE = "ssurgo-soil-line";
 
-export default function SSURGOLayer({ selectedField, isVisible, onLegendUpdate, onLoadingUpdate }) {
-  const [ssurgoData, setSsurgoData] = useState(null);
-  const [error, setError] = useState(null);
+export default function SSURGOLayer({
+    map,
+    mapReady,
+    selectedField,
+    isVisible,
+    onLegendUpdate,
+    onLoadingUpdate,
+}) {
+    const [ssurgoData, setSsurgoData] = useState(null);
+    const popupRef = useRef(null);
 
-  const loadSsurgoData = useCallback(async () => {
-    if (!selectedField || !selectedField.geometry || !isVisible) {
-      setSsurgoData(null);
-      onLegendUpdate({ legend: [], isDemo: false }); // Pass full object
-      return;
-    }
+    const loadSsurgoData = useCallback(async () => {
+        if (!selectedField || !selectedField.geometry || !isVisible) {
+            setSsurgoData(null);
+            onLegendUpdate({ legend: [], isDemo: false });
+            return;
+        }
 
-    onLoadingUpdate(true);
-    setError(null);
+        onLoadingUpdate(true);
 
-    try {
-      const response = await getSsurgoData({ geometry: selectedField.geometry });
+        try {
+            const response = await getSsurgoData({ geometry: selectedField.geometry });
 
-      if (response.data?.success) {
-        setSsurgoData(response.data.data);
-        // Pass the entire relevant info object up, not just the legend array
-        onLegendUpdate({ 
-          legend: response.data.legend || [], 
-          isDemo: response.data.isDemo || false 
-        });
-      } else {
-        throw new Error(response.data?.error || 'Failed to load soil data');
-      }
-    } catch (err) {
-      console.error('Error loading SSURGO data:', err);
-      setError(err.message);
-      onLegendUpdate({ legend: [], isDemo: false }); // Pass full object on error
-    } finally {
-      onLoadingUpdate(false);
-    }
-  }, [selectedField, isVisible, onLegendUpdate, onLoadingUpdate]);
-
-  useEffect(() => {
-    loadSsurgoData();
-  }, [loadSsurgoData]);
-
-  if (!isVisible || !ssurgoData || !ssurgoData.features || ssurgoData.features.length === 0) {
-    return null;
-  }
-
-  // Enhanced style function for beautiful soil polygons
-  const getSsurgoStyle = (feature) => ({
-    fillColor: feature.properties.color,
-    fillOpacity: 0.8, // Increased opacity for more vibrant colors
-    color: '#ffffff', // White borders like Granular
-    weight: 1.5, // Thinner, cleaner borders
-    opacity: 0.9,
-    // Add subtle shadow effect
-    shadowBlur: 2,
-    shadowColor: 'rgba(0,0,0,0.3)'
-  });
-
-  return (
-    <>
-      {ssurgoData.features.map((feature, index) => (
-        <GeoJSON
-          key={`ssurgo-${index}`}
-          data={feature}
-          style={getSsurgoStyle}
-          onEachFeature={(feature, layer) => {
-            // Add hover effects and popup information
-            layer.on({
-              mouseover: (e) => {
-                const layer = e.target;
-                layer.setStyle({
-                  fillOpacity: 0.9,
-                  weight: 2,
-                  color: '#2563eb'
+            if (response.data?.success) {
+                setSsurgoData(response.data.data);
+                onLegendUpdate({
+                    legend: response.data.legend || [],
+                    isDemo: response.data.isDemo || false,
                 });
-              },
-              mouseout: (e) => {
-                const layer = e.target;
-                layer.setStyle(getSsurgoStyle(feature));
-              }
-            });
-            
-            // Bind popup with soil information
-            layer.bindPopup(`
+            } else {
+                throw new Error(response.data?.error || "Failed to load soil data");
+            }
+        } catch (err) {
+            console.error("Error loading SSURGO data:", err);
+            onLegendUpdate({ legend: [], isDemo: false });
+            setSsurgoData(null);
+        } finally {
+            onLoadingUpdate(false);
+        }
+    }, [selectedField, isVisible, onLegendUpdate, onLoadingUpdate]);
+
+    useEffect(() => {
+        loadSsurgoData();
+    }, [loadSsurgoData]);
+
+    useEffect(() => {
+        if (!map || !mapReady || !map.loaded()) return;
+
+        const removePopup = () => {
+            if (popupRef.current) {
+                popupRef.current.remove();
+                popupRef.current = null;
+            }
+        };
+
+        const removeSsurgo = () => {
+            removePopup();
+            if (map.getLayer(SSURGO_LINE)) map.removeLayer(SSURGO_LINE);
+            if (map.getLayer(SSURGO_FILL)) map.removeLayer(SSURGO_FILL);
+            if (map.getSource(SSURGO_SOURCE)) map.removeSource(SSURGO_SOURCE);
+        };
+
+        if (!isVisible || !ssurgoData?.features?.length) {
+            removeSsurgo();
+            return;
+        }
+
+        const fc = {
+            type: "FeatureCollection",
+            features: ssurgoData.features,
+        };
+
+        const onClick = (e) => {
+            const f = e.features?.[0];
+            if (!f) return;
+            const p = f.properties || {};
+            removePopup();
+            const html = `
               <div class="p-2">
-                <h3 class="font-semibold text-sm">${feature.properties.MUNAME}</h3>
+                <h3 class="font-semibold text-sm">${p.MUNAME ?? ""}</h3>
                 <div class="text-xs text-gray-600 mt-1">
-                  <p><strong>Symbol:</strong> ${feature.properties.MUSYM}</p>
-                  <p><strong>Acres:</strong> ${Math.round(feature.properties.MUACRES * 10) / 10}</p>
-                  <p><strong>Drainage:</strong> ${feature.properties.drainageClass}</p>
-                  <p><strong>Classification:</strong> ${feature.properties.farmlandClass}</p>
+                  <p><strong>Symbol:</strong> ${p.MUSYM ?? ""}</p>
+                  <p><strong>Acres:</strong> ${Math.round((p.MUACRES ?? 0) * 10) / 10}</p>
+                  <p><strong>Drainage:</strong> ${p.drainageClass ?? ""}</p>
+                  <p><strong>Classification:</strong> ${p.farmlandClass ?? ""}</p>
                 </div>
-              </div>
-            `);
-          }}
-        />
-      ))}
-    </>
-  );
+              </div>`;
+            popupRef.current = new maplibregl.Popup({ closeButton: true })
+                .setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map);
+        };
+
+        const onEnter = () => {
+            map.getCanvas().style.cursor = "pointer";
+        };
+        const onLeave = () => {
+            map.getCanvas().style.cursor = "";
+        };
+
+        map.addSource(SSURGO_SOURCE, { type: "geojson", data: fc });
+        map.addLayer({
+            id: SSURGO_FILL,
+            type: "fill",
+            source: SSURGO_SOURCE,
+            paint: {
+                "fill-color": ["get", "color"],
+                "fill-opacity": 0.8,
+            },
+        });
+        map.addLayer({
+            id: SSURGO_LINE,
+            type: "line",
+            source: SSURGO_SOURCE,
+            paint: {
+                "line-color": "#ffffff",
+                "line-width": 1.5,
+                "line-opacity": 0.9,
+            },
+        });
+        map.on("click", SSURGO_FILL, onClick);
+        map.on("mouseenter", SSURGO_FILL, onEnter);
+        map.on("mouseleave", SSURGO_FILL, onLeave);
+
+        return () => {
+            map.off("click", SSURGO_FILL, onClick);
+            map.off("mouseenter", SSURGO_FILL, onEnter);
+            map.off("mouseleave", SSURGO_FILL, onLeave);
+            removeSsurgo();
+        };
+    }, [map, mapReady, isVisible, ssurgoData]);
+
+    return null;
 }
