@@ -54,13 +54,13 @@ export default function FieldSidebar({
   ssurgoLoading
 }) {
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
+    <div className="flex h-full min-h-0 w-full flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800 mb-3">Field Management</h2>
+      <div className="border-b border-gray-200/90 p-3">
+        <h2 className="mb-2 text-base font-semibold text-gray-800">Field Management</h2>
         
         {/* Mode Controls */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="mb-2 grid grid-cols-2 gap-2">
           <Button
             size="sm"
             variant={mode === 'view' ? 'default' : 'outline'}
@@ -80,15 +80,15 @@ export default function FieldSidebar({
         </div>
 
         {/* Actions - Upload Shapefile Button */}
-        <Button size="sm" variant="outline" className="w-full mb-3" onClick={onUploadShapefile}>
+        <Button size="sm" variant="outline" className="mb-2 w-full" onClick={onUploadShapefile}>
           <FileUp className="w-4 h-4 mr-2" />
           Upload Shapefile
         </Button>
 
         {/* Drawing Controls - Only show when in draw mode */}
         {mode === 'draw' && (
-          <Card className="mb-3">
-            <CardContent className="p-3">
+          <Card className="mb-2">
+            <CardContent className="p-2.5">
               <div className="flex items-center gap-2 mb-2">
                 <Info className="w-4 h-4 text-blue-500" />
                 <span className="text-sm text-gray-600">
@@ -139,10 +139,10 @@ export default function FieldSidebar({
 
       {/* Scrollable Content Area */}
       <ScrollArea className="flex-1">
-        <div className="p-4 space-y-4">
+        <div className="space-y-3 p-3">
           {/* Smart Soil Test Linking Panel - Only show when a field is selected */}
           {selectedField && mode === 'view' && (
-            <div className="mb-4">
+            <div className="mb-3">
               <SoilTestLinkingPanel
                 selectedField={selectedField}
                 onLinked={onSoilTestLinked}
@@ -152,7 +152,7 @@ export default function FieldSidebar({
 
           {/* Map Layers Section - Only show when in view mode and field is selected */}
           {selectedField && mode === 'view' && (
-            <Card className="mb-4">
+            <Card className="mb-3">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Layers3 className="w-4 h-4 text-blue-600" />
@@ -193,7 +193,7 @@ export default function FieldSidebar({
           {/* Fields List */}
           <div>
             {isLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {[1, 2, 3].map(i => (
                   <div key={i} className="animate-pulse">
                     <div className="h-20 bg-gray-200 rounded-lg"></div>
@@ -209,7 +209,7 @@ export default function FieldSidebar({
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {fields.map(field => (
                   <Card 
                     key={field.id} 
@@ -218,7 +218,7 @@ export default function FieldSidebar({
                     }`}
                     onClick={() => onFieldSelect(field)}
                   >
-                    <CardContent className="p-3">
+                    <CardContent className="p-2.5">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="font-medium text-gray-800 truncate">
                           {field.field_name}

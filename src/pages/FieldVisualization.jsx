@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -364,19 +364,38 @@ function FieldVisualizationContent() {
         src.setData(buildFieldsGeoJSON());
     }, [mapReady, buildFieldsGeoJSON]);
 
-    /** Fit map to selected field polygon (immediate, avoids flash of broad basemap when a field is active) */
+    const selectedFieldGeometryKey = useMemo(
+        () => (selectedField?.geometry ? JSON.stringify(selectedField.geometry) : null),
+        [selectedField?.geometry]
+    );
+
+    /** Fit map to selected field when selection or geometry changes; skip during draw mode */
     useEffect(() => {
         const map = mapRef.current;
-        if (!mapReady || !map?.loaded?.() || !selectedField?.geometry) return;
+        if (!mapReady || !map?.loaded?.()) return;
+        if (mode === "draw") return;
+        if (!selectedField?.geometry) return;
         const b = boundsFromPolygonGeometry(selectedField.geometry);
         if (!b) return;
+
+        const isLg = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+        const isMd = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+        let padding;
+        if (isLg) {
+            padding = { top: 40, bottom: 120, left: 320, right: 40 };
+        } else if (isMd) {
+            padding = { top: 40, bottom: 120, left: 288, right: 40 };
+        } else {
+            padding = { top: 40, bottom: 140, left: 16, right: 16 };
+        }
+
         map.fitBounds(b, {
-            padding: { top: 56, bottom: 112, left: 20, right: 20 },
+            padding,
             maxZoom: 16,
-            duration: 0,
+            duration: 500,
         });
         setMapZoom(map.getZoom());
-    }, [mapReady, selectedField?.id, selectedField?.geometry]);
+    }, [mapReady, selectedField?.id, selectedFieldGeometryKey, mode]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -489,13 +508,24 @@ function FieldVisualizationContent() {
 
     /** When no field is selected, gently frame the first field with geometry (or center_point) */
     useEffect(() => {
+        if (!mapReady) return;
         if (!isLoading && fieldsList.length > 0 && !selectedField && mapRef.current?.loaded?.()) {
             const withGeom = fieldsList.find((f) => f.geometry);
             if (withGeom) {
                 const b = boundsFromPolygonGeometry(withGeom.geometry);
                 if (b) {
+                    const isLg = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+                    const isMd = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+                    let padding;
+                    if (isLg) {
+                        padding = { top: 48, bottom: 112, left: 320, right: 24 };
+                    } else if (isMd) {
+                        padding = { top: 48, bottom: 112, left: 288, right: 24 };
+                    } else {
+                        padding = { top: 40, bottom: 120, left: 16, right: 16 };
+                    }
                     mapRef.current.fitBounds(b, {
-                        padding: { top: 56, bottom: 112, left: 20, right: 20 },
+                        padding,
                         maxZoom: 14,
                         duration: 600,
                     });
@@ -513,7 +543,7 @@ function FieldVisualizationContent() {
                 setMapZoom(12);
             }
         }
-    }, [fieldsList, isLoading, selectedField, center]);
+    }, [fieldsList, isLoading, selectedField, center, mapReady]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -686,7 +716,7 @@ function FieldVisualizationContent() {
 
     return (
         <div className="flex h-screen bg-gray-50 relative">
-            <div className="hidden md:block md:w-80 lg:w-96 absolute left-0 top-0 h-full z-[1000] bg-white border-r border-gray-200 shadow-lg">
+            <div className="hidden md:block md:w-72 lg:w-80 absolute left-0 top-0 h-full z-[1000] border-r border-slate-200/80 bg-white shadow-md">
                 <FieldSidebar
                     fields={searchedFields}
                     isLoading={isLoading}
@@ -709,7 +739,7 @@ function FieldVisualizationContent() {
                 />
             </div>
 
-            <div className="flex-1 md:ml-80 lg:ml-96 relative min-h-0">
+            <div className="relative min-h-0 w-full flex-1 min-w-0 md:ml-72 lg:ml-80">
                 <div className="md:hidden absolute top-4 left-4 z-[1000]">
                     <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
                         <SheetTrigger asChild>
@@ -720,7 +750,7 @@ function FieldVisualizationContent() {
                                 <PanelLeft className="w-5 h-5 text-gray-800" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="p-0 w-80 z-[1001]">
+                        <SheetContent side="left" className="w-72 p-0 z-[1001]">
                             <FieldSidebar
                                 fields={searchedFields}
                                 isLoading={isLoading}
@@ -764,9 +794,9 @@ function FieldVisualizationContent() {
                 />
 
                 {mapReady && mapInstance && (
-                    <div className="pointer-events-none absolute bottom-4 right-3 z-[900] max-w-[min(100vw-1.5rem,16rem)] sm:bottom-6 sm:right-4">
+                    <div className="pointer-events-none absolute bottom-4 right-4 z-[900] max-w-[min(100vw-2rem,16rem)]">
                         <div
-                            className="pointer-events-auto overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-lg shadow-slate-900/10 backdrop-blur-md"
+                            className="pointer-events-auto overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-lg shadow-slate-900/15 backdrop-blur-md"
                             role="group"
                             aria-label="Map overlays"
                         >
