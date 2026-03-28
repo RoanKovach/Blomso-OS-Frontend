@@ -17,7 +17,7 @@ import SSURGOLayer from "../components/visualization/SSURGOLayer";
 import SSURGOLegend from "../components/visualization/SSURGOLegend";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { PanelLeft } from "lucide-react";
+import { Layers, PanelLeft, Satellite, Sprout, MapPinned } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const FIELD_SOURCE = "fields-src";
@@ -32,6 +32,60 @@ const DRAW_DASH_LINE = "draw-dash-line";
 const SAT_LAYER = "satellite-layer";
 const NDVI_LAYER = "ndvi-layer";
 const PARCELS_LAYER = "parcels-layer";
+
+/** Product defaults (override API defaults for normal UX) */
+const PRODUCT_LAYER_DEFAULTS = {
+    satellite: true,
+    ndvi: false,
+    parcels: true,
+};
+
+const OUR_MAP_LAYER_IDS = new Set([
+    SAT_LAYER,
+    NDVI_LAYER,
+    PARCELS_LAYER,
+    FIELDS_FILL,
+    FIELDS_LINE,
+    DRAW_POLY_FILL,
+    DRAW_POLY_LINE,
+    DRAW_DASH_LINE,
+]);
+
+function isOurOrExtensionLayer(id) {
+    if (!id) return false;
+    if (OUR_MAP_LAYER_IDS.has(id)) return true;
+    return id.startsWith("ssurgo-");
+}
+
+/**
+ * Hide built-in style layers (cartoon vector basemap) so satellite / overlays read as the base experience.
+ * Remembers ids so we can restore when the user turns satellite off.
+ */
+function suppressCartoonBasemap(map, hiddenIdsRef) {
+    hiddenIdsRef.current = [];
+    const style = map.getStyle();
+    if (!style?.layers) return;
+    for (const layer of style.layers) {
+        if (isOurOrExtensionLayer(layer.id)) continue;
+        try {
+            map.setLayoutProperty(layer.id, "visibility", "none");
+            hiddenIdsRef.current.push(layer.id);
+        } catch {
+            /* layer may not support visibility */
+        }
+    }
+}
+
+function restoreCartoonBasemap(map, hiddenIdsRef) {
+    for (const id of hiddenIdsRef.current) {
+        try {
+            map.setLayoutProperty(id, "visibility", "visible");
+        } catch {
+            /* ignore */
+        }
+    }
+    hiddenIdsRef.current = [];
+}
 
 function boundsFromPolygonGeometry(geometry) {
     if (!geometry || geometry.type !== "Polygon") return null;
@@ -54,40 +108,19 @@ function boundsFromPolygonGeometry(geometry) {
     ];
 }
 
-function FieldHighlighter({ fieldToHighlight, fields, onHighlightComplete, map }) {
-    useEffect(() => {
-        if (!fieldToHighlight || !fields.length || !map?.loaded?.()) return;
-
-        const field = fields.find((f) => f.id === fieldToHighlight);
-        if (!field?.geometry) return;
-
-        const b = boundsFromPolygonGeometry(field.geometry);
-        if (!b) return;
-
-        map.fitBounds(b, { padding: 30, maxZoom: 17 });
-
-        const timeout = setTimeout(() => {
-            if (onHighlightComplete) onHighlightComplete();
-        }, 3000);
-
-        return () => clearTimeout(timeout);
-    }, [map, fieldToHighlight, fields, onHighlightComplete]);
-
-    return null;
-}
-
 function FieldVisualizationContent() {
     const location = useLocation();
 
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
     const drawingMarkersRef = useRef([]);
+    const basemapHiddenLayerIdsRef = useRef([]);
 
     const [mapConfig, setMapConfig] = useState(null);
     const [mapReady, setMapReady] = useState(false);
-    /** MapLibre instance for children that must re-render when the map exists */
     const [mapInstance, setMapInstance] = useState(null);
     const [mapInitError, setMapInitError] = useState(null);
+    const [mapZoom, setMapZoom] = useState(0);
 
     const [center, setCenter] = useState([40.0, -82.5]);
     const [zoom, setZoom] = useState(7);
@@ -99,11 +132,10 @@ function FieldVisualizationContent() {
     const [showCreationModal, setShowCreationModal] = useState(false);
     const [showShapefileModal, setShowShapefileModal] = useState(false);
 
-    const [fieldToHighlight, setFieldToHighlight] = useState(null);
     const [hasProcessedDeepLink, setHasProcessedDeepLink] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState("");
-    const { fields, isLoading, error, createField, deleteField, refetch, isCreating } = useFieldOperations();
+    const { fields, isLoading, createField, deleteField, refetch, isCreating } = useFieldOperations();
     const fieldsList = Array.isArray(fields) ? fields : [];
     const { searchResults: searchedFields } = useFieldSearch(fieldsList, searchTerm);
 
@@ -116,11 +148,7 @@ function FieldVisualizationContent() {
 
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-    const [layerToggle, setLayerToggle] = useState({
-        satellite: false,
-        ndvi: false,
-        parcels: false,
-    });
+    const [layerToggle, setLayerToggle] = useState({ ...PRODUCT_LAYER_DEFAULTS });
 
     useEffect(() => {
         let cancelled = false;
@@ -140,16 +168,6 @@ function FieldVisualizationContent() {
             cancelled = true;
         };
     }, [toast]);
-
-    useEffect(() => {
-        if (mapConfig?.defaults) {
-            setLayerToggle({
-                satellite: !!mapConfig.defaults.showSatellite,
-                ndvi: !!mapConfig.defaults.showNdvi,
-                parcels: !!mapConfig.defaults.showParcels,
-            });
-        }
-    }, [mapConfig]);
 
     useEffect(() => {
         if (!mapConfig || !mapContainerRef.current || mapRef.current) return;
@@ -182,10 +200,13 @@ function FieldVisualizationContent() {
             if (!L) {
                 setMapInstance(map);
                 setMapReady(true);
+                setMapZoom(map.getZoom());
                 return;
             }
 
-            const addRaster = (id, sourceId, spec, layerId, defaultVisible, opacity) => {
+            const defs = PRODUCT_LAYER_DEFAULTS;
+
+            const addRaster = (sourceId, spec, layerId, defaultVisible, opacity) => {
                 if (!spec?.tiles?.length) return;
                 const tileSize = spec.tileSize ?? 256;
                 map.addSource(sourceId, {
@@ -214,11 +235,9 @@ function FieldVisualizationContent() {
                 map.addLayer(layerDef);
             };
 
-            const defs = mapConfig.defaults || {};
-
-            addRaster("sat", "satellite-src", L.satellite, SAT_LAYER, !!defs.showSatellite, null);
-            addRaster("ndvi", "ndvi-src", L.ndvi, NDVI_LAYER, !!defs.showNdvi, L.ndvi?.opacity);
-            addRaster("parcels", "parcels-src", L.parcels, PARCELS_LAYER, !!defs.showParcels, null);
+            addRaster("satellite-src", L.satellite, SAT_LAYER, defs.satellite, null);
+            addRaster("ndvi-src", L.ndvi, NDVI_LAYER, defs.ndvi, L.ndvi?.opacity);
+            addRaster("parcels-src", L.parcels, PARCELS_LAYER, defs.parcels, null);
 
             map.addSource(FIELD_SOURCE, {
                 type: "geojson",
@@ -232,14 +251,14 @@ function FieldVisualizationContent() {
                     "fill-color": [
                         "case",
                         ["==", ["get", "selected"], true],
-                        "#3b82f6",
+                        "#2563eb",
                         "#93c5fd",
                     ],
                     "fill-opacity": [
                         "case",
                         ["==", ["get", "selected"], true],
-                        0.6,
-                        0.3,
+                        0.22,
+                        0.12,
                     ],
                 },
             });
@@ -251,10 +270,11 @@ function FieldVisualizationContent() {
                     "line-color": [
                         "case",
                         ["==", ["get", "selected"], true],
-                        "#1d4ed8",
-                        "#3b82f6",
+                        "#ffffff",
+                        "#60a5fa",
                     ],
-                    "line-width": 2,
+                    "line-width": ["case", ["==", ["get", "selected"], true], 3, 2],
+                    "line-opacity": 1,
                 },
             });
 
@@ -296,13 +316,24 @@ function FieldVisualizationContent() {
                 },
             });
 
+            if (defs.satellite && map.getLayer(SAT_LAYER)) {
+                suppressCartoonBasemap(map, basemapHiddenLayerIdsRef);
+            }
+
+            setLayerToggle({ ...defs });
             setMapInstance(map);
             setMapReady(true);
+            setMapZoom(map.getZoom());
         });
 
+        const onZoomEnd = () => setMapZoom(map.getZoom());
+        map.on("zoomend", onZoomEnd);
+
         return () => {
+            map.off("zoomend", onZoomEnd);
             setMapReady(false);
             setMapInstance(null);
+            basemapHiddenLayerIdsRef.current = [];
             if (mapRef.current) {
                 mapRef.current.remove();
                 mapRef.current = null;
@@ -332,6 +363,20 @@ function FieldVisualizationContent() {
         if (!src) return;
         src.setData(buildFieldsGeoJSON());
     }, [mapReady, buildFieldsGeoJSON]);
+
+    /** Fit map to selected field polygon (immediate, avoids flash of broad basemap when a field is active) */
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!mapReady || !map?.loaded?.() || !selectedField?.geometry) return;
+        const b = boundsFromPolygonGeometry(selectedField.geometry);
+        if (!b) return;
+        map.fitBounds(b, {
+            padding: { top: 56, bottom: 112, left: 20, right: 20 },
+            maxZoom: 16,
+            duration: 0,
+        });
+        setMapZoom(map.getZoom());
+    }, [mapReady, selectedField?.id, selectedField?.geometry]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -402,7 +447,6 @@ function FieldVisualizationContent() {
     const handleFieldSelect = useCallback(
         (field) => {
             setSelectedField(field);
-            setFieldToHighlight(field?.id ?? null);
             trackUserAction("field_selected", { field_id: field.id });
         },
         [trackUserAction]
@@ -429,7 +473,6 @@ function FieldVisualizationContent() {
             const field = fieldsList.find((f) => f.id === fieldIdToSelect);
             if (field) {
                 handleFieldSelect(field);
-                setFieldToHighlight(fieldIdToSelect);
                 trackUserAction("deep_link_field_view", { field_id: fieldIdToSelect });
             } else {
                 toast.error("Field not found or you do not have access to it.");
@@ -444,18 +487,33 @@ function FieldVisualizationContent() {
         setHasProcessedDeepLink(false);
     }, [location.search]);
 
+    /** When no field is selected, gently frame the first field with geometry (or center_point) */
     useEffect(() => {
-        if (!isLoading && fieldsList.length > 0 && center[0] === 40.0 && !fieldToHighlight && mapRef.current?.loaded?.()) {
-            const fieldWithCenter = fieldsList.find((f) => f.center_point);
-            if (fieldWithCenter) {
-                const la = fieldWithCenter.center_point.latitude;
-                const lo = fieldWithCenter.center_point.longitude;
+        if (!isLoading && fieldsList.length > 0 && !selectedField && mapRef.current?.loaded?.()) {
+            const withGeom = fieldsList.find((f) => f.geometry);
+            if (withGeom) {
+                const b = boundsFromPolygonGeometry(withGeom.geometry);
+                if (b) {
+                    mapRef.current.fitBounds(b, {
+                        padding: { top: 56, bottom: 112, left: 20, right: 20 },
+                        maxZoom: 14,
+                        duration: 600,
+                    });
+                    setMapZoom(mapRef.current.getZoom());
+                    return;
+                }
+            }
+            const withCenter = fieldsList.find((f) => f.center_point);
+            if (withCenter && center[0] === 40.0) {
+                const la = withCenter.center_point.latitude;
+                const lo = withCenter.center_point.longitude;
                 setCenter([la, lo]);
                 setZoom(12);
                 mapRef.current.flyTo({ center: [lo, la], zoom: 12 });
+                setMapZoom(12);
             }
         }
-    }, [fieldsList, isLoading, center, fieldToHighlight]);
+    }, [fieldsList, isLoading, selectedField, center]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -589,10 +647,6 @@ function FieldVisualizationContent() {
         refetch();
     }, [refetch]);
 
-    const handleHighlightComplete = useCallback(() => {
-        setFieldToHighlight(null);
-    }, []);
-
     const handleSSURGOToggle = useCallback(
         (enabled) => {
             setShowSSURGO(enabled);
@@ -608,6 +662,8 @@ function FieldVisualizationContent() {
         setSsurgoLayerInfo(layerInfo || { legend: [], isDemo: false });
     }, []);
 
+    const parcelMinZoom = mapConfig?.layers?.parcels?.minzoom ?? 11;
+
     const toggleRasterLayer = (layerId, key) => {
         const map = mapRef.current;
         if (!map?.loaded?.() || !map.getLayer(layerId)) return;
@@ -615,7 +671,18 @@ function FieldVisualizationContent() {
         const next = vis === "visible" ? "none" : "visible";
         map.setLayoutProperty(layerId, "visibility", next);
         setLayerToggle((prev) => ({ ...prev, [key]: next === "visible" }));
+
+        if (layerId === SAT_LAYER && map.getLayer(SAT_LAYER)) {
+            if (next === "visible") {
+                suppressCartoonBasemap(map, basemapHiddenLayerIdsRef);
+            } else {
+                restoreCartoonBasemap(map, basemapHiddenLayerIdsRef);
+            }
+        }
     };
+
+    const layerControlBtn =
+        "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2";
 
     return (
         <div className="flex h-screen bg-gray-50 relative">
@@ -692,40 +759,70 @@ function FieldVisualizationContent() {
 
                 <div
                     ref={mapContainerRef}
-                    className="z-0 h-screen w-full"
+                    className="z-0 h-screen w-full bg-slate-950"
                     style={{ width: "100%", height: "100vh", minHeight: "100vh" }}
                 />
 
                 {mapReady && mapInstance && (
-                    <div className="pointer-events-none absolute bottom-6 right-4 z-[900] flex flex-col gap-2">
-                        <div className="pointer-events-auto flex flex-col gap-1 rounded-md border border-gray-200 bg-white/95 p-2 shadow-md">
-                            <button
-                                type="button"
-                                className={`rounded px-3 py-1.5 text-left text-sm font-medium ${
-                                    layerToggle.satellite ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-800"
-                                }`}
-                                onClick={() => toggleRasterLayer(SAT_LAYER, "satellite")}
-                            >
-                                Satellite
-                            </button>
-                            <button
-                                type="button"
-                                className={`rounded px-3 py-1.5 text-left text-sm font-medium ${
-                                    layerToggle.ndvi ? "bg-emerald-800 text-white" : "bg-gray-100 text-gray-800"
-                                }`}
-                                onClick={() => toggleRasterLayer(NDVI_LAYER, "ndvi")}
-                            >
-                                NDVI
-                            </button>
-                            <button
-                                type="button"
-                                className={`rounded px-3 py-1.5 text-left text-sm font-medium ${
-                                    layerToggle.parcels ? "bg-amber-800 text-white" : "bg-gray-100 text-gray-800"
-                                }`}
-                                onClick={() => toggleRasterLayer(PARCELS_LAYER, "parcels")}
-                            >
-                                Parcels
-                            </button>
+                    <div className="pointer-events-none absolute bottom-4 right-3 z-[900] max-w-[min(100vw-1.5rem,16rem)] sm:bottom-6 sm:right-4">
+                        <div
+                            className="pointer-events-auto overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-lg shadow-slate-900/10 backdrop-blur-md"
+                            role="group"
+                            aria-label="Map overlays"
+                        >
+                            <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/90 px-3 py-2">
+                                <Layers className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
+                                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                    Layers
+                                </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 p-1.5">
+                                <button
+                                    type="button"
+                                    className={`${layerControlBtn} ${
+                                        layerToggle.satellite
+                                            ? "bg-slate-900 text-white shadow-sm"
+                                            : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
+                                    }`}
+                                    onClick={() => toggleRasterLayer(SAT_LAYER, "satellite")}
+                                >
+                                    <Satellite className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                                    <span>Satellite</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`${layerControlBtn} ${
+                                        layerToggle.ndvi
+                                            ? "bg-emerald-700 text-white shadow-sm"
+                                            : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
+                                    }`}
+                                    onClick={() => toggleRasterLayer(NDVI_LAYER, "ndvi")}
+                                >
+                                    <Sprout className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                                    <span>NDVI</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`${layerControlBtn} ${
+                                        layerToggle.parcels
+                                            ? "bg-amber-800 text-white shadow-sm"
+                                            : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
+                                    }`}
+                                    onClick={() => toggleRasterLayer(PARCELS_LAYER, "parcels")}
+                                >
+                                    <MapPinned className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                                    <span>Parcels</span>
+                                </button>
+                            </div>
+                            {layerToggle.parcels &&
+                                mapZoom > 0 &&
+                                mapZoom < parcelMinZoom &&
+                                mapConfig?.layers?.parcels?.tiles?.length > 0 && (
+                                    <p className="border-t border-slate-100 px-3 py-2 text-[11px] leading-snug text-slate-500">
+                                        Zoom in for clearer parcel lines (current maps often sharpen
+                                        above zoom {parcelMinZoom}).
+                                    </p>
+                                )}
                         </div>
                     </div>
                 )}
@@ -744,13 +841,6 @@ function FieldVisualizationContent() {
                     isVisible={showSSURGO && ssurgoLayerInfo.legend.length > 0}
                     isDemo={ssurgoLayerInfo.isDemo}
                     onClose={() => setShowSSURGO(false)}
-                />
-
-                <FieldHighlighter
-                    fieldToHighlight={fieldToHighlight}
-                    fields={fieldsList}
-                    onHighlightComplete={handleHighlightComplete}
-                    map={mapInstance}
                 />
             </div>
 
