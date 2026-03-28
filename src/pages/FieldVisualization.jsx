@@ -149,6 +149,10 @@ function FieldVisualizationContent() {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     const [layerToggle, setLayerToggle] = useState({ ...PRODUCT_LAYER_DEFAULTS });
+    /** Increments on every field select (including re-clicking the same field) so fitBounds always runs */
+    const [fieldSelectionSeq, setFieldSelectionSeq] = useState(0);
+    /** True when NDVI uses the same tile URLs as satellite or is missing — do not label as real NDVI */
+    const [ndviIsPlaceholder, setNdviIsPlaceholder] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -236,7 +240,19 @@ function FieldVisualizationContent() {
             };
 
             addRaster("satellite-src", L.satellite, SAT_LAYER, defs.satellite, null);
-            addRaster("ndvi-src", L.ndvi, NDVI_LAYER, defs.ndvi, L.ndvi?.opacity);
+
+            const satTiles = L.satellite?.tiles;
+            const ndviTiles = L.ndvi?.tiles;
+            const ndviDuplicateOrMissing =
+                !ndviTiles?.length ||
+                (satTiles?.length &&
+                    ndviTiles.length === satTiles.length &&
+                    JSON.stringify(satTiles) === JSON.stringify(ndviTiles));
+            setNdviIsPlaceholder(ndviDuplicateOrMissing);
+            if (!ndviDuplicateOrMissing) {
+                addRaster("ndvi-src", L.ndvi, NDVI_LAYER, defs.ndvi, L.ndvi?.opacity);
+            }
+
             addRaster("parcels-src", L.parcels, PARCELS_LAYER, defs.parcels, null);
 
             map.addSource(FIELD_SOURCE, {
@@ -364,18 +380,25 @@ function FieldVisualizationContent() {
         src.setData(buildFieldsGeoJSON());
     }, [mapReady, buildFieldsGeoJSON]);
 
-    const selectedFieldGeometryKey = useMemo(
-        () => (selectedField?.geometry ? JSON.stringify(selectedField.geometry) : null),
-        [selectedField?.geometry]
+    /** Prefer list row geometry so refetches/async geometry updates still fit correctly */
+    const selectedFieldMerged = useMemo(() => {
+        if (!selectedField?.id) return null;
+        return fieldsList.find((f) => f.id === selectedField.id) ?? selectedField;
+    }, [fieldsList, selectedField]);
+
+    const mergedGeometryKey = useMemo(
+        () =>
+            selectedFieldMerged?.geometry ? JSON.stringify(selectedFieldMerged.geometry) : null,
+        [selectedFieldMerged?.geometry]
     );
 
-    /** Fit map to selected field when selection or geometry changes; skip during draw mode */
+    /** Fit map to selected field when selection, geometry, or explicit re-select changes; skip during draw mode */
     useEffect(() => {
         const map = mapRef.current;
         if (!mapReady || !map?.loaded?.()) return;
         if (mode === "draw") return;
-        if (!selectedField?.geometry) return;
-        const b = boundsFromPolygonGeometry(selectedField.geometry);
+        if (!selectedField?.id || !selectedFieldMerged?.geometry) return;
+        const b = boundsFromPolygonGeometry(selectedFieldMerged.geometry);
         if (!b) return;
 
         const isLg = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
@@ -392,10 +415,10 @@ function FieldVisualizationContent() {
         map.fitBounds(b, {
             padding,
             maxZoom: 16,
-            duration: 500,
+            duration: 450,
         });
         setMapZoom(map.getZoom());
-    }, [mapReady, selectedField?.id, selectedFieldGeometryKey, mode]);
+    }, [mapReady, selectedField?.id, mergedGeometryKey, mode, fieldSelectionSeq]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -465,6 +488,7 @@ function FieldVisualizationContent() {
 
     const handleFieldSelect = useCallback(
         (field) => {
+            setFieldSelectionSeq((n) => n + 1);
             setSelectedField(field);
             trackUserAction("field_selected", { field_id: field.id });
         },
@@ -697,6 +721,7 @@ function FieldVisualizationContent() {
     const toggleRasterLayer = (layerId, key) => {
         const map = mapRef.current;
         if (!map?.loaded?.() || !map.getLayer(layerId)) return;
+        if (layerId === NDVI_LAYER && ndviIsPlaceholder) return;
         const vis = map.getLayoutProperty(layerId, "visibility");
         const next = vis === "visible" ? "none" : "visible";
         map.setLayoutProperty(layerId, "visibility", next);
@@ -794,9 +819,9 @@ function FieldVisualizationContent() {
                 />
 
                 {mapReady && mapInstance && (
-                    <div className="pointer-events-none absolute bottom-4 right-4 z-[900] max-w-[min(100vw-2rem,16rem)]">
+                    <div className="pointer-events-none absolute right-4 top-4 z-[900] max-w-[min(100vw-2rem,16rem)] md:right-4 md:top-4">
                         <div
-                            className="pointer-events-auto overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-lg shadow-slate-900/15 backdrop-blur-md"
+                            className="pointer-events-auto max-h-[min(420px,calc(100vh-7rem))] overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-lg shadow-slate-900/15 backdrop-blur-md"
                             role="group"
                             aria-label="Map overlays"
                         >
@@ -819,18 +844,38 @@ function FieldVisualizationContent() {
                                     <Satellite className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
                                     <span>Satellite</span>
                                 </button>
-                                <button
-                                    type="button"
-                                    className={`${layerControlBtn} ${
-                                        layerToggle.ndvi
-                                            ? "bg-emerald-700 text-white shadow-sm"
-                                            : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
-                                    }`}
-                                    onClick={() => toggleRasterLayer(NDVI_LAYER, "ndvi")}
-                                >
-                                    <Sprout className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                                    <span>NDVI</span>
-                                </button>
+                                {ndviIsPlaceholder ? (
+                                    <div
+                                        className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-2.5 py-2 text-left"
+                                        role="note"
+                                    >
+                                        <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                                            <Sprout className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+                                            <span>NDVI</span>
+                                            <span className="rounded bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                                                Soon
+                                            </span>
+                                        </div>
+                                        <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+                                            A dedicated vegetation index layer will appear here when the map API
+                                            provides a separate NDVI source (currently not distinct from
+                                            satellite).
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className={`${layerControlBtn} ${
+                                            layerToggle.ndvi
+                                                ? "bg-emerald-700 text-white shadow-sm"
+                                                : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
+                                        }`}
+                                        onClick={() => toggleRasterLayer(NDVI_LAYER, "ndvi")}
+                                    >
+                                        <Sprout className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                                        <span>NDVI</span>
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     className={`${layerControlBtn} ${
