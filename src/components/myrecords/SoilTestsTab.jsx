@@ -211,6 +211,14 @@ export default function SoilTestsTab() {
         loadTests();
     }, [loadTests]);
 
+    useEffect(() => {
+        if (isLoading) return;
+        if (location.hash !== "#export") return;
+        requestAnimationFrame(() => {
+            document.getElementById("export")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    }, [isLoading, location.hash]);
+
     const NON_TERMINAL_STATUSES = ['uploaded', 'extracting', 'processing', 'needs_review'];
     const hasNonTerminalUploads = useMemo(() => {
         if (!backendRecordsMode || !uploadRecords.length) return false;
@@ -901,10 +909,10 @@ export default function SoilTestsTab() {
             )}
             
             <div className="space-y-3">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-wrap items-center gap-4">
                         <h3 className="text-lg font-semibold text-green-900">
-                            {backendRecordsMode ? "Workbench Records" : "Records"}
+                            {backendRecordsMode ? "Evidence across fields" : "Records"}
                         </h3>
                         {!backendRecordsMode && (
                             <Tabs value={viewMode} onValueChange={setViewMode} className="w-auto">
@@ -924,25 +932,28 @@ export default function SoilTestsTab() {
                             </Tabs>
                         )}
                     </div>
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    onClick={handleExport}
-                                    disabled={isExporting}
-                                    variant="default"
-                                >
-                                    <Download className="w-4 h-4 mr-2" />
-                                    {isExporting ? "Exporting..." : "Export CSV"}
-                                </Button>
-                            </TooltipTrigger>
-                            {isDemo && (
-                                <TooltipContent>
-                                    <p>Exporting as CSV is a premium feature.</p>
-                                </TooltipContent>
-                            )}
-                        </Tooltip>
-                    </TooltipProvider>
+                    {!backendRecordsMode && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        onClick={handleExport}
+                                        disabled={isExporting}
+                                        variant="default"
+                                        id="export"
+                                    >
+                                        <Download className="w-4 h-4 mr-2" />
+                                        {isExporting ? "Exporting..." : "Export CSV"}
+                                    </Button>
+                                </TooltipTrigger>
+                                {isDemo && (
+                                    <TooltipContent>
+                                        <p>Exporting as CSV is a premium feature.</p>
+                                    </TooltipContent>
+                                )}
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
                 </div>
 
                 {backendRecordsMode && (
@@ -1000,14 +1011,20 @@ export default function SoilTestsTab() {
                     <h3 className="text-lg font-semibold text-gray-800">No Records Yet</h3>
                     <p className="text-gray-600">Upload a document to start building your Workbench records.</p>
                     <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-4 bg-green-600 hover:bg-green-700">
-                        Upload Your First Document
+                        Add data
                     </Button>
                 </Card>
             ) : backendRecordsMode ? (
                 <>
                     {/* Upload records: backend status and extraction status drive UI */}
                     <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-green-900">Uploads / Documents</h3>
+                        <div>
+                            <h3 className="text-lg font-semibold text-green-900">Incoming documents & evidence</h3>
+                            <p className="text-sm text-slate-600">
+                                PDFs and uploads land here first. Review and fix until status is ready — then they appear
+                                as structured records below.
+                            </p>
+                        </div>
                         {filteredUploadRecords.length === 0 ? (
                             <Card className="text-center p-6">
                                 <p className="text-gray-600">
@@ -1015,7 +1032,7 @@ export default function SoilTestsTab() {
                                         ? 'No uploads yet. Upload a PDF to see it here.'
                                         : 'No uploads match the selected filters.'}
                                 </p>
-                                <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-3 bg-green-600 hover:bg-green-700">Upload a File</Button>
+                                <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-3 bg-green-600 hover:bg-green-700">Add data</Button>
                             </Card>
                         ) : (
                             <div className="overflow-x-auto border rounded-lg bg-white">
@@ -1115,17 +1132,39 @@ export default function SoilTestsTab() {
                         )}
                     </div>
                     {/* Saved records (normalized soil + yield) */}
-                    {(filteredSavedSoil.length > 0 || filteredSavedYield.length > 0) ? (
-                        <div className="space-y-6 mt-8">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="space-y-1">
-                                    <h3 className="text-lg font-semibold text-green-900">Saved Records</h3>
-                                    {savedRecordsViewMode === "datasheet" && (
-                                        <p className="text-sm text-green-800/90">
-                                            Use the <strong>Family</strong> filter above to show all families, soil tests only, or yield tickets only.
-                                        </p>
-                                    )}
-                                </div>
+                    <div className="mt-10 space-y-6 border-t border-slate-200 pt-8">
+                        <p className="text-sm text-slate-600">
+                            Reviewed evidence becomes structured records. Use <strong>Standard</strong> for tables, or{" "}
+                            <strong>Data Sheet</strong> to customize columns — then export CSV from this section.
+                        </p>
+                        <div
+                            id="export"
+                            className="flex flex-col gap-4 rounded-lg border border-slate-200/80 bg-white/60 p-4 shadow-sm lg:flex-row lg:items-start lg:justify-between"
+                        >
+                            <div className="min-w-0 flex-1 space-y-1">
+                                <h3 className="text-lg font-semibold text-green-900">Saved records, data sheet & export</h3>
+                                {savedRecordsViewMode === "datasheet" && (
+                                    <p className="text-sm text-green-800/90">
+                                        Use the <strong>Family</strong> filter above to show all families, soil tests only, or yield tickets only.
+                                    </p>
+                                )}
+                            </div>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end">
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button onClick={handleExport} disabled={isExporting} variant="default">
+                                                <Download className="mr-2 h-4 w-4" />
+                                                {isExporting ? "Exporting..." : "Export CSV"}
+                                            </Button>
+                                        </TooltipTrigger>
+                                        {isDemo && (
+                                            <TooltipContent>
+                                                <p>Exporting as CSV is a premium feature.</p>
+                                            </TooltipContent>
+                                        )}
+                                    </Tooltip>
+                                </TooltipProvider>
                                 <Tabs
                                     value={savedRecordsViewMode}
                                     onValueChange={setSavedRecordsViewMode}
@@ -1137,6 +1176,7 @@ export default function SoilTestsTab() {
                                     </TabsList>
                                 </Tabs>
                             </div>
+                        </div>
 
                             {savedRecordsViewMode === "datasheet" ? (
                                 <>
@@ -1335,18 +1375,18 @@ export default function SoilTestsTab() {
                                     </div>
                                 </div>
                             )}
+                            {filteredSavedSoil.length === 0 && filteredSavedYield.length === 0 && (
+                                <Card className="mt-4 p-6 text-center">
+                                    <p className="text-gray-600">
+                                        {(tests.length > 0 || yieldRecords.length > 0)
+                                            ? "No saved records match the selected filters."
+                                            : "Uploads can be reviewed and normalized into saved records here once extraction is complete."}
+                                    </p>
+                                </Card>
+                            )}
                                 </>
                             )}
-                        </div>
-                    ) : (
-                        <Card className="text-center p-6 mt-8">
-                            <p className="text-gray-600">
-                                {(tests.length > 0 || yieldRecords.length > 0)
-                                    ? "No saved records match the selected filters."
-                                    : "Uploads can be reviewed and normalized into saved records here once extraction is complete."}
-                            </p>
-                        </Card>
-                    )}
+                    </div>
                 </>
             ) : (
                 <Tabs value={viewMode} onValueChange={setViewMode}>

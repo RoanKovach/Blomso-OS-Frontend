@@ -15,40 +15,36 @@ export function isYieldTicketDocument(documentFamily) {
 export function getUploadCopy(documentFamily) {
   if (isYieldTicketDocument(documentFamily)) {
     return {
-      heroTitle: 'Upload Document',
+      heroTitle: "Add data",
       heroSubtitle:
-        'Upload yield scale tickets or ton sheets as agricultural evidence.',
-      step1Title: 'Step 1: Upload Your Yield Scale Ticket',
+        "Attach yield scale tickets or ton sheets as evidence for the field you select in the next step.",
+      step1Title: "Step 1: Upload your yield ticket PDF",
       step1Description:
-        'Drag & drop your scanned scale ticket or ton sheet, or click to browse for a PDF file.',
-      dropTitle: 'Upload Your Yield Scale Ticket',
-      dropSubtitle:
-        'Drag & drop your scanned scale ticket or ton sheet, or click to browse',
-      contextCta: 'Continue to Harvest Context',
+        "Drag & drop your scanned scale ticket or ton sheet, or click to browse for a PDF file.",
+      dropTitle: "Upload your yield ticket",
+      dropSubtitle: "Drag & drop your PDF, or click to browse",
+      contextCta: "Continue — attach to field",
     };
   }
 
   // Default: soil_test
   return {
-    heroTitle: 'Upload Document',
+    heroTitle: "Add data",
     heroSubtitle:
-      'Upload soil test reports as PDFs for AI-assisted analysis and recommendations.',
-    step1Title: 'Step 1: Upload Your Soil Test Report',
-    step1Description:
-      'Drag & drop your soil test report PDF, or click to browse.',
-    dropTitle: 'Upload Your Soil Test',
-    dropSubtitle:
-      'Drag & drop your soil test report, or click to browse',
-    contextCta: 'Continue to Field Context',
+      "Upload a soil test PDF, then attach it to a field so evidence stays organized for review and export.",
+    step1Title: "Step 1: Upload your soil test PDF",
+    step1Description: "Drag & drop your soil test report PDF, or click to browse.",
+    dropTitle: "Upload your soil test",
+    dropSubtitle: "Drag & drop your PDF, or click to browse",
+    contextCta: "Continue — attach to field",
   };
 }
 
 export function getStepLabels(documentFamily) {
   if (isYieldTicketDocument(documentFamily)) {
-    return ['Upload File', 'Harvest Context', 'AI Processing', 'Review Ticket Data'];
+    return ["Upload", "Field & evidence", "Processing", "Review"];
   }
-  // Default soil_test labels (preserve existing semantics)
-  return ['Upload File', 'Field Context', 'AI Processing', 'Review Extracted Data'];
+  return ["Upload", "Field & evidence", "Processing", "Review"];
 }
 
 export function getReviewTitle(documentFamily) {

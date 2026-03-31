@@ -15,6 +15,7 @@ import { useFieldOperations } from "../components/hooks/useFieldOperations";
 import { useFieldSearch } from "../components/hooks/useFieldSearch";
 import SSURGOLayer from "../components/visualization/SSURGOLayer";
 import SSURGOLegend from "../components/visualization/SSURGOLegend";
+import FieldWorkbenchPanel from "../components/visualization/FieldWorkbenchPanel";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Layers, PanelLeft, Satellite, Sprout, MapPinned } from "lucide-react";
@@ -153,6 +154,8 @@ function FieldVisualizationContent() {
     const [fieldSelectionSeq, setFieldSelectionSeq] = useState(0);
     /** True when NDVI uses the same tile URLs as satellite or is missing — do not label as real NDVI */
     const [ndviIsPlaceholder, setNdviIsPlaceholder] = useState(false);
+    /** Bumps FieldWorkbenchPanel evidence refresh when linking completes */
+    const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -699,6 +702,7 @@ function FieldVisualizationContent() {
 
     const handleSoilTestLinked = useCallback(() => {
         refetch();
+        setEvidenceRefreshKey((k) => k + 1);
     }, [refetch]);
 
     const handleSSURGOToggle = useCallback(
@@ -764,7 +768,12 @@ function FieldVisualizationContent() {
                 />
             </div>
 
-            <div className="relative min-h-0 w-full flex-1 min-w-0 md:ml-72 lg:ml-80">
+            <div className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col md:ml-72 lg:ml-80">
+                {selectedField && mode === "view" && selectedFieldMerged && (
+                    <FieldWorkbenchPanel field={selectedFieldMerged} evidenceKey={evidenceRefreshKey} />
+                )}
+
+                <div className="relative flex min-h-0 flex-1 flex-col">
                 <div className="md:hidden absolute top-4 left-4 z-[1000]">
                     <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
                         <SheetTrigger asChild>
@@ -814,8 +823,8 @@ function FieldVisualizationContent() {
 
                 <div
                     ref={mapContainerRef}
-                    className="z-0 h-screen w-full bg-slate-950"
-                    style={{ width: "100%", height: "100vh", minHeight: "100vh" }}
+                    className="z-0 min-h-0 w-full flex-1 bg-slate-950"
+                    style={{ width: "100%", minHeight: "min(100vh, 100%)" }}
                 />
 
                 {mapReady && mapInstance && (
@@ -845,23 +854,10 @@ function FieldVisualizationContent() {
                                     <span>Satellite</span>
                                 </button>
                                 {ndviIsPlaceholder ? (
-                                    <div
-                                        className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-2.5 py-2 text-left"
-                                        role="note"
-                                    >
-                                        <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                                            <Sprout className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-                                            <span>NDVI</span>
-                                            <span className="rounded bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                                                Soon
-                                            </span>
-                                        </div>
-                                        <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
-                                            A dedicated vegetation index layer will appear here when the map API
-                                            provides a separate NDVI source (currently not distinct from
-                                            satellite).
-                                        </p>
-                                    </div>
+                                    <p className="px-2.5 py-1.5 text-[11px] leading-snug text-slate-500" role="note">
+                                        Vegetation index (NDVI): not available as a separate layer yet — requires a
+                                        distinct source from satellite imagery.
+                                    </p>
                                 ) : (
                                     <button
                                         type="button"
@@ -917,6 +913,7 @@ function FieldVisualizationContent() {
                     isDemo={ssurgoLayerInfo.isDemo}
                     onClose={() => setShowSSURGO(false)}
                 />
+                </div>
             </div>
 
             <FieldCreationModal
@@ -944,8 +941,8 @@ export default function FieldVisualizationPage() {
     if (isDemoMode) {
         return (
             <DemoGate
-                title="Field visualization"
-                message="Field visualization is available for full accounts. Create an account to get access."
+                title="Fields"
+                message="The field workbench is available for full accounts. Create an account to get access."
             />
         );
     }

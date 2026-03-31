@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, ArrowLeft, Upload as UploadIcon, FileArchive } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/api/entities";
 import { isUnauthenticatedError } from "@/api/auth";
@@ -28,6 +28,8 @@ import { DOCUMENT_FAMILY_SOIL_TEST, DOCUMENT_FAMILY_YIELD_TICKET, getUploadCopy,
 
 export default function UploadPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const fieldIdFromUrl = searchParams.get("fieldId");
     const { refreshAuth, clearAuth } = useAuth();
     const [file, setFile] = useState(null);
     const [dragActive, setDragActive] = useState(false);
@@ -834,6 +836,7 @@ export default function UploadPage() {
                         onSubmit={handleContextualSubmit}
                         onBack={() => setCurrentStep(1)}
                         canonicalFields={canonicalFields}
+                        initialFieldId={fieldIdFromUrl || undefined}
                     />
                 )}
 

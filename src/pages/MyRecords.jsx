@@ -1,45 +1,30 @@
-import React from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Database, Beaker, Tractor } from "lucide-react";
+import React from "react";
+import { Database } from "lucide-react";
 
 import SoilTestsTab from "../components/myrecords/SoilTestsTab";
-import PracticesTab from "../components/myrecords/PracticesTab";
 
 export default function MyRecordsPage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-amber-50 p-4 md:p-8">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div className="mx-auto max-w-7xl">
+                <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
                     <div>
-                        <h1 className="text-3xl md:text-4xl font-bold text-green-900 mb-2 flex items-center gap-3">
-                            <Database className="w-8 h-8" />
+                        <h1 className="mb-2 flex items-center gap-3 text-3xl font-bold text-green-900 md:text-4xl">
+                            <Database className="h-8 w-8" />
                             My Records
                         </h1>
-                        <p className="text-green-700 text-lg">
-                            A unified Workbench surface for uploads, normalized records, and field-linked history.
+                        <p className="text-lg text-green-800">
+                            All evidence across your fields in one place: incoming documents and uploads up top,{" "}
+                            <strong>saved records</strong>, the <strong>customizable data sheet</strong>, and{" "}
+                            <strong>export</strong> below.
+                        </p>
+                        <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                            Flow: upload → review → save → structured records appear in Standard or Data Sheet → export CSV.
                         </p>
                     </div>
                 </div>
 
-                <Tabs defaultValue="soil_tests" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="soil_tests">
-                            <Beaker className="w-4 h-4 mr-2" />
-                            Workbench Records
-                        </TabsTrigger>
-                        <TabsTrigger value="practices">
-                            <Tractor className="w-4 h-4 mr-2" />
-                            Practices
-                        </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="soil_tests" className="mt-6">
-                        <SoilTestsTab />
-                    </TabsContent>
-                    <TabsContent value="practices" className="mt-6">
-                        <PracticesTab />
-                    </TabsContent>
-                </Tabs>
+                <SoilTestsTab />
             </div>
         </div>
     );

@@ -1,115 +1,92 @@
 
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
-import { 
-  ArrowRight, 
+import {
+  ArrowRight,
   Zap,
   FlaskConical,
-  Loader2,
   FileText,
-  Download
+  Download,
+  MapPin,
+  Database,
+  Upload,
 } from "lucide-react";
-import { useTracking } from '@/components/analytics/useTracking';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from "@/contexts/AuthContext";
 
-import MiniToolsSection from "../components/dashboard/MiniToolsSection";
-import { SoilTest } from "@/api/entities";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2 } from "lucide-react";
-
-const HeroSection = () => {
-  const { trackUserAction } = useTracking();
+const OrientationSection = () => {
   const { isDemoMode } = useAuth();
 
-  const handleGetStarted = () => {
-    trackUserAction('hero_cta_clicked', {
-      button_text: 'Start Analysis',
-      page: 'Dashboard'
-    });
-  };
-
-  const handleFeedbackClick = (type) => {
-    trackUserAction('external_link_clicked', {
-      link_type: type,
-      destination: type === 'roadmap' ? 'featurebase_roadmap' : 'featurebase_feedback'
-    });
-  };
-
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600/10 via-yellow-300/10 to-green-300/10 p-8 mb-8 border border-black/5">
-      <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-emerald-500/5 to-transparent -z-10" />
-      <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-gradient-to-t from-yellow-300/5 to-transparent -z-10" />
-      
-      <div className="grid lg:grid-cols-2 gap-8 items-center">
+    <div className="relative overflow-hidden rounded-2xl border border-black/5 bg-gradient-to-br from-emerald-600/10 via-yellow-300/10 to-green-300/10 p-8 mb-8">
+      <div className="absolute top-0 right-0 -z-10 h-full w-1/3 bg-gradient-to-l from-emerald-500/5 to-transparent" />
+      <div className="absolute bottom-0 left-0 -z-10 h-1/2 w-1/2 bg-gradient-to-t from-yellow-300/5 to-transparent" />
+
+      <div className="grid items-center gap-8 lg:grid-cols-2">
         <div className="space-y-6">
           <div className="flex items-center gap-4">
-            <img 
-              src="/logo-icon.png" 
-              alt="Blomso Logo" 
+            <img
+              src="/logo-icon.png"
+              alt="Blomso Logo"
               className="h-12 w-auto"
               onError={(e) => {
-                e.target.style.display = 'none';
+                e.target.style.display = "none";
               }}
             />
             {isDemoMode && (
-              <div className="bg-yellow-200/50 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 rounded-full bg-yellow-200/50 px-3 py-1 text-xs font-bold text-yellow-800">
                 <Zap className="h-3 w-3" />
                 Demo Mode
               </div>
             )}
           </div>
-          <h1 className="text-4xl font-bold text-gray-800">
-            Transform Your Soil Data into <span className="text-emerald-600">Actionable Insights</span>
+          <h1 className="text-3xl font-bold text-gray-800 md:text-4xl">
+            Your field evidence workbench
           </h1>
-          {isDemoMode && (
-            <p className="text-lg text-gray-600">
-              Explore this demo application for soil health analysis. Upload your own data or try our sample datasets to see how AI can help with agricultural insights.
-            </p>
-          )}
-          
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-              <Link to={createPageUrl("Upload")}>
-                <Button 
-                  size="lg" 
-                  className="bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300 w-full sm:w-auto"
-                  onClick={handleGetStarted}
-                >
-                    Start Analysis
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
+          <p className="text-lg text-gray-600">
+            Attach uploads to fields, review and save structured records, then export — all in one place.
+            The map supports your fields; fields stay the anchor.
+          </p>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Button asChild size="lg" className="bg-emerald-700 hover:bg-emerald-800">
+              <Link to={createPageUrl("FieldVisualization")} className="inline-flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Open Fields
+                <ArrowRight className="h-4 w-4" />
               </Link>
-              <div className="flex gap-2">
-                <a href="https://blomso.featurebase.app/roadmap" target="_blank" rel="noopener noreferrer">
-                  <Button 
-                    variant="ghost" 
-                    className="text-gray-600 hover:text-blue-700"
-                    onClick={() => handleFeedbackClick('roadmap')}
-                  >
-                    🗺️ Roadmap
-                  </Button>
-                </a>
-                <a href="https://blomso.featurebase.app/" target="_blank" rel="noopener noreferrer">
-                  <Button 
-                    variant="ghost" 
-                    className="text-gray-600 hover:text-blue-700"
-                    onClick={() => handleFeedbackClick('feedback')}
-                  >
-                    💬 Feedback
-                  </Button>
-                </a>
-              </div>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="border-emerald-200 bg-white/80">
+              <Link to={createPageUrl("Upload")} className="inline-flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Add data
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="secondary">
+              <Link to={createPageUrl("MyRecords")} className="inline-flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                My Records
+              </Link>
+            </Button>
           </div>
+
+          <p className="text-sm text-gray-500">
+            Optional:{" "}
+            <Link to={createPageUrl("Recommendations")} className="font-medium text-emerald-700 underline-offset-2 hover:underline">
+              Insights
+            </Link>{" "}
+            for later-stage analysis when you are ready.
+          </p>
         </div>
-        
+
         <div className="flex justify-center lg:justify-end">
           <div className="relative w-full max-w-md lg:max-w-lg">
-            <img 
-              src="/dashboard-hero.png" 
-              alt="Blomso dashboard with soil analysis workflow" 
-              className="w-full h-auto rounded-lg shadow-lg object-cover"
-              style={{ aspectRatio: '4/3' }}
+            <img
+              src="/dashboard-hero.png"
+              alt="Field and records workflow"
+              className="h-auto w-full rounded-lg object-cover shadow-lg"
+              style={{ aspectRatio: "4/3" }}
             />
           </div>
         </div>
@@ -125,48 +102,50 @@ const DemoSection = () => {
       url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/e13b9ca92_S24-26393.pdf",
     },
     {
-      name: "Field 48 - Penn State Soil Test.pdf", 
+      name: "Field 48 - Penn State Soil Test.pdf",
       url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/fb9368828_S24-26397.pdf",
     },
     {
       name: "Field 49 - Penn State Soil Test.pdf",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/3d3ab1784_S24-26398.pdf", 
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/3d3ab1784_S24-26398.pdf",
     },
     {
       name: "Field 2 - Penn State Soil Test.pdf",
       url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/7ca35b2ef_S24-26347.pdf",
-    }
+    },
   ];
 
   return (
-    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-8 border border-gray-200 shadow-sm">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-        <div className="w-12 h-12 bg-gray-100 rounded-full flex-shrink-0 flex items-center justify-center">
-            <FlaskConical className="w-6 h-6 text-gray-600" />
+    <div className="rounded-2xl border border-gray-200 bg-white/60 p-8 shadow-sm backdrop-blur-sm">
+      <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gray-100">
+          <FlaskConical className="h-6 w-6 text-gray-600" />
         </div>
         <div>
-            <h2 className="text-2xl font-bold text-gray-800">
-              Don't have a soil test?
-            </h2>
-            <p className="text-gray-600">
-              Download a sample PDF to try our AI analysis on the <Link to={createPageUrl("Upload")} className="text-emerald-600 font-medium hover:underline">Upload Data page</Link>.
-            </p>
+          <h2 className="text-2xl font-bold text-gray-800">Try a sample soil test</h2>
+          <p className="text-gray-600">
+            Download a sample PDF and add it on the{" "}
+            <Link to={createPageUrl("Upload")} className="font-medium text-emerald-600 hover:underline">
+              Add Data
+            </Link>{" "}
+            page to see the review flow.
+          </p>
         </div>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {sampleFiles.map((file, index) => (
-          <a 
+          <a
             key={index}
             href={file.url}
             download={file.name}
-            className="group flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-emerald-50 border border-gray-200 hover:border-emerald-300 transition-all duration-200"
+            className="group flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 transition-all duration-200 hover:border-emerald-300 hover:bg-emerald-50"
           >
-            <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
-            <span className="flex-1 font-medium text-gray-700 group-hover:text-emerald-800 text-sm truncate">
+            <FileText className="h-5 w-5 flex-shrink-0 text-red-500" />
+            <span className="flex-1 truncate text-sm font-medium text-gray-700 group-hover:text-emerald-800">
               {file.name}
             </span>
-            <Download className="w-4 h-4 text-gray-400 group-hover:text-emerald-600 transition-colors" />
+            <Download className="h-4 w-4 flex-shrink-0 text-gray-400 transition-colors group-hover:text-emerald-600" />
           </a>
         ))}
       </div>
@@ -176,18 +155,25 @@ const DemoSection = () => {
 
 export default function Dashboard() {
   return (
-    <div className="p-4 md:p-8 bg-gray-50/50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <HeroSection />
-        
-        <MiniToolsSection />
-        
-        <div className="mt-12">
-          <DemoSection />
-        </div>
-        
-        <footer className="mt-16 pt-8 border-t text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Blomso. Powered by <a href="https://blomso.com" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline">Blomso.com</a>.</p>
+    <div className="min-h-screen bg-gray-50/50 p-4 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        <OrientationSection />
+
+        <DemoSection />
+
+        <footer className="mt-16 border-t pt-8 text-center text-sm text-muted-foreground">
+          <p>
+            &copy; {new Date().getFullYear()} Blomso. Powered by{" "}
+            <a
+              href="https://blomso.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-600 hover:underline"
+            >
+              Blomso.com
+            </a>
+            .
+          </p>
         </footer>
       </div>
     </div>

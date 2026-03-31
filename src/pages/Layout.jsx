@@ -7,27 +7,28 @@ import { getUserDisplayIdentity } from "@/utils/displayIdentity";
 import { User } from "@/api/entities";
 import { isHostedUiConfigured } from "@/api/auth";
 import { useAuth } from "@/contexts/AuthContext";
-import { 
+import {
   LayoutDashboard,
-  Upload, 
-  Map, 
-  BrainCircuit, 
+  Upload,
+  MapPin,
+  Sparkles,
   LogOut,
   Database,
   User as UserIcon,
-  MapPin 
 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
   SidebarProvider,
+  SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -39,12 +40,15 @@ import { useTracking } from '@/components/analytics/useTracking';
 import AppErrorBoundary from '@/components/error/AppErrorBoundary';
 import { ConnectionStatusBanner } from '@/components/ui/ConnectionStatusBanner';
 
-const navigationItems = [
-  { name: "Dashboard", href: "Dashboard", icon: LayoutDashboard },
-  { name: "Upload Data", href: "Upload", icon: Upload },
-  { name: "Field Visualization", href: "FieldVisualization", icon: Map },
+const primaryNav = [
+  { name: "Fields", href: "FieldVisualization", icon: MapPin },
+  { name: "Add Data", href: "Upload", icon: Upload },
   { name: "My Records", href: "MyRecords", icon: Database },
-  { name: "AI Recommendations", href: "Recommendations", icon: BrainCircuit },
+];
+
+const secondaryNav = [
+  { name: "Home", href: "Dashboard", icon: LayoutDashboard },
+  { name: "Insights", href: "Recommendations", icon: Sparkles },
 ];
 
 export default function Layout({ children, currentPageName }) {
@@ -77,20 +81,48 @@ export default function Layout({ children, currentPageName }) {
               </Link>
             </SidebarHeader>
             
-            <SidebarContent className="p-4 flex flex-col justify-between">
+            <SidebarContent className="flex flex-col justify-between gap-2 p-4">
               <SidebarGroup>
+                <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Workbench
+                </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {navigationItems.map((item) => (
+                    {primaryNav.map((item) => (
                       <SidebarMenuItem key={item.name}>
-                        <Link to={item.disabled ? "#" : createPageUrl(item.href)}>
+                        <Link to={createPageUrl(item.href)}>
                           <SidebarMenuButton
                             isActive={currentPageName === item.href}
-                            disabled={item.disabled}
-                            className="flex items-center gap-3"
+                            className="flex items-center gap-3 font-medium"
                           >
-                            <item.icon className="w-5 h-5" />
+                            <item.icon className="h-5 w-5 shrink-0" />
                             <span>{item.name}</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+
+              <SidebarSeparator />
+
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  More
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {secondaryNav.map((item) => (
+                      <SidebarMenuItem key={item.name}>
+                        <Link to={createPageUrl(item.href)}>
+                          <SidebarMenuButton
+                            isActive={currentPageName === item.href}
+                            className="flex items-center gap-3 text-muted-foreground data-[active=true]:text-sidebar-accent-foreground"
+                            size="sm"
+                          >
+                            <item.icon className="h-4 w-4 shrink-0 opacity-80" />
+                            <span className="text-sm">{item.name}</span>
                           </SidebarMenuButton>
                         </Link>
                       </SidebarMenuItem>

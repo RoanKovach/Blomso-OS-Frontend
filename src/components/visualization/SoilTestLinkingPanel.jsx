@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Link, MapPin, Calendar, Target } from 'lucide-react';
+import { Loader2, Link2, Calendar, MapPin } from 'lucide-react';
 import { suggestSoilTestLinks } from '@/api/functions';
 import { linkSoilTestsToField } from '@/api/functions';
 import { useToasts } from '@/components/hooks/useToasts';
@@ -19,15 +18,15 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
 
   const loadSuggestions = async () => {
     if (!selectedField) return;
-    
+
     setIsLoading(true);
     try {
       const { data } = await suggestSoilTestLinks({ field_id: selectedField.id });
-      
+
       if (data.success) {
         setSuggestions(data.suggested_matches || []);
         setMatchSummary(data.match_summary);
-        
+
         const highConfidenceIds = (data.suggested_matches || [])
           .filter(match => match.confidence_score >= 0.7)
           .map(match => match.soil_test_id);
@@ -88,13 +87,12 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
           toast.error(`${data.summary.failed} test(s) failed to link. See console for details.`);
           console.error("Linking failures:", data.results.filter(r => r.status === 'error'));
         }
-        
-        // Refresh suggestions and notify parent of the successful change
+
         if (data.summary.successful > 0) {
           if (onLinked) onLinked();
         }
-        await loadSuggestions(); // Always reload suggestions
-        setSelectedTests(new Set()); // Clear selection
+        await loadSuggestions();
+        setSelectedTests(new Set());
       } else {
         throw new Error(data.error || 'Unknown error during linking');
       }
@@ -113,110 +111,107 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
   };
 
   if (!selectedField) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-center text-gray-500">
-          <Target className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p>Select a field to see soil test suggestions</p>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Link className="w-5 h-5" />
-          Smart Soil Test Linking
-        </CardTitle>
-        <p className="text-sm text-gray-600">
-          Suggested unlinked soil tests for <strong>{selectedField.field_name}</strong>
-        </p>
-      </CardHeader>
-      
-      <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" />
-            <span>Finding matching soil tests...</span>
-          </div>
-        ) : suggestions.length === 0 ? (
-          <Alert>
-            <AlertDescription>
-              No unlinked soil tests found that match this field. Upload soil test reports in "My Records" to see suggestions here.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <div className="space-y-4">
-            {matchSummary && (
-              <div className="flex gap-4 text-sm">
-                <span className="text-green-600">High: {matchSummary.high_confidence}</span>
-                <span className="text-yellow-600">Medium: {matchSummary.medium_confidence}</span>
-                <span className="text-gray-600">Low: {matchSummary.low_confidence}</span>
-              </div>
-            )}
+    <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
+      <div className="mb-2 flex items-start gap-2">
+        <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-slate-900">Unlinked soil tests for this field</h3>
+          <p className="text-xs text-slate-600">
+            Attach evidence that matches <span className="font-medium text-slate-800">{selectedField.field_name}</span>.
+          </p>
+        </div>
+      </div>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {suggestions.map((suggestion) => (
-                <div key={suggestion.soil_test_id} className="border rounded-lg p-3">
-                  <div className="flex items-start gap-3">
+      {isLoading ? (
+        <div className="flex items-center gap-2 py-4 text-sm text-slate-600">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Looking for matches…</span>
+        </div>
+      ) : suggestions.length === 0 ? (
+        <Alert className="border-slate-200 bg-white py-2">
+          <AlertDescription className="text-xs text-slate-600">
+            No unlinked soil tests match this field right now. Add PDFs under My Records, then check back.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <div className="space-y-2">
+          {matchSummary && (
+            <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+              <span>High: {matchSummary.high_confidence}</span>
+              <span>Med: {matchSummary.medium_confidence}</span>
+              <span>Low: {matchSummary.low_confidence}</span>
+            </div>
+          )}
+
+          <div className="max-h-48 space-y-2 overflow-y-auto pr-0.5">
+            {suggestions.map((suggestion) => {
+              const details = suggestion.soil_test_details || {};
+              const loc = details.location;
+              return (
+                <div key={suggestion.soil_test_id} className="rounded-md border border-slate-200/80 bg-white p-2">
+                  <div className="flex items-start gap-2">
                     <Checkbox
                       checked={selectedTests.has(suggestion.soil_test_id)}
                       onCheckedChange={(checked) => handleTestSelection(suggestion.soil_test_id, checked)}
-                      className="mt-1"
+                      className="mt-0.5"
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium truncate">{suggestion.soil_test_name}</h4>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-slate-900">{suggestion.soil_test_name}</span>
                         {getConfidenceBadge(suggestion.confidence_score)}
                       </div>
-                      <div className="text-sm text-gray-500 space-y-1">
+                      <div className="mt-1 space-y-0.5 text-[11px] text-slate-500">
                         {suggestion.test_date && (
                           <div className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
+                            <Calendar className="h-3 w-3 shrink-0" />
                             <span>{new Date(suggestion.test_date).toLocaleDateString()}</span>
                           </div>
                         )}
-                        {suggestion.soil_test_details.location && (
+                        {loc && (loc.address || (loc.latitude != null && loc.longitude != null)) && (
                           <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            <span>
-                              {suggestion.soil_test_details.location.address || 
-                               `${suggestion.soil_test_details.location.latitude?.toFixed(4)}, ${suggestion.soil_test_details.location.longitude?.toFixed(4)}`}
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span className="truncate">
+                              {loc.address ||
+                                `${loc.latitude?.toFixed?.(4) ?? loc.latitude}, ${loc.longitude?.toFixed?.(4) ?? loc.longitude}`}
                             </span>
                           </div>
                         )}
-                        <div className="text-xs text-blue-600">
-                          Match: {suggestion.match_reasons.join(' • ')}
-                        </div>
+                        {suggestion.match_reasons?.length > 0 && (
+                          <div className="text-slate-600">{suggestion.match_reasons.join(' · ')}</div>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2 pt-4 border-t">
-              <Button
-                onClick={handleLinkSelected}
-                disabled={selectedTests.size === 0 || isLinking}
-                className="flex-1"
-              >
-                {isLinking && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Link Selected ({selectedTests.size})
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setSelectedTests(new Set())}
-                disabled={selectedTests.size === 0}
-              >
-                Clear
-              </Button>
-            </div>
+              );
+            })}
           </div>
-        )}
-      </CardContent>
-    </Card>
+
+          <div className="flex gap-2 border-t border-slate-200/80 pt-2">
+            <Button
+              size="sm"
+              onClick={handleLinkSelected}
+              disabled={selectedTests.size === 0 || isLinking}
+              className="flex-1"
+            >
+              {isLinking && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+              Attach selected ({selectedTests.size})
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedTests(new Set())}
+              disabled={selectedTests.size === 0}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

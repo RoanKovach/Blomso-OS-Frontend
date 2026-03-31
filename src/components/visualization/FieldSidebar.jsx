@@ -5,20 +5,19 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  Plus, 
-  Search, 
-  MapPin, 
-  Trash2, 
-  Eye, 
+import {
+  Search,
+  MapPin,
+  Trash2,
+  Eye,
   Edit3,
   Check,
   X,
   Info,
   Pencil,
-  FileUp, // Added FileUp icon
-  Layers3, // Added Layers3 icon for map layers
-  Loader2 // Added for loading state
+  FileUp,
+  Layers3,
+  Loader2
 } from 'lucide-react';
 
 // Import the linking panel component
@@ -57,7 +56,7 @@ export default function FieldSidebar({
     <div className="flex h-full min-h-0 w-full flex-col">
       {/* Header */}
       <div className="border-b border-gray-200/90 p-3">
-        <h2 className="mb-2 text-base font-semibold text-gray-800">Field Management</h2>
+        <h2 className="mb-2 text-base font-semibold text-gray-800">Fields</h2>
         
         {/* Mode Controls */}
         <div className="mb-2 grid grid-cols-2 gap-2">
@@ -140,26 +139,16 @@ export default function FieldSidebar({
       {/* Scrollable Content Area */}
       <ScrollArea className="flex-1">
         <div className="space-y-3 p-3">
-          {/* Smart Soil Test Linking Panel - Only show when a field is selected */}
-          {selectedField && mode === 'view' && (
-            <div className="mb-3">
-              <SoilTestLinkingPanel
-                selectedField={selectedField}
-                onLinked={onSoilTestLinked}
-              />
-            </div>
-          )}
-
           {/* Map Layers Section - Only show when in view mode and field is selected */}
           {selectedField && mode === 'view' && (
-            <Card className="mb-3">
+            <Card className="mb-3 border-slate-200/80 bg-slate-50/50">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Layers3 className="w-4 h-4 text-blue-600" />
-                  Map Layers
+                <CardTitle className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <Layers3 className="h-4 w-4 text-slate-500" />
+                  Map context (optional)
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-0 space-y-3">
+              <CardContent className="space-y-2 pt-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <input
@@ -172,19 +161,19 @@ export default function FieldSidebar({
                     />
                     <label
                       htmlFor="ssurgo-layer"
-                      className="text-sm text-gray-700 cursor-pointer"
-                      title="Show USDA soil-series polygons for the selected field"
+                      className="cursor-pointer text-sm text-gray-700"
+                      title="USDA soil-series polygons (demo overlay)"
                     >
-                      SSURGO Soil Types
+                      SSURGO soil types
                     </label>
-                    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">Demo</Badge>
+                    <Badge variant="outline" className="border-amber-200 bg-amber-50 text-xs text-amber-800">Demo</Badge>
                   </div>
                   {ssurgoLoading && (
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                   )}
                 </div>
-                <p className="text-xs text-gray-500">
-                  Example visualization of soil series polygons within your field boundaries.
+                <p className="text-xs text-slate-500">
+                  Reference layer only — not a substitute for your uploaded soil test evidence.
                 </p>
               </CardContent>
             </Card>
@@ -269,6 +258,12 @@ export default function FieldSidebar({
               </div>
             )}
           </div>
+
+          {selectedField && mode === 'view' && (
+            <div className="mt-2">
+              <SoilTestLinkingPanel selectedField={selectedField} onLinked={onSoilTestLinked} />
+            </div>
+          )}
         </div>
       </ScrollArea>
     </div>
