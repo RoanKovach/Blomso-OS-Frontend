@@ -32,6 +32,7 @@ import {
     getCanonicalFieldContextForYieldRecord,
 } from "./fieldDisplayUtils";
 import FieldSummaryDrawer from "./FieldSummaryDrawer";
+import RecordsCollapsible from "./RecordsCollapsible";
 import { blobFromExportSoilTestsResponse } from "./exportSoilTestsResponse";
 import { formatDateOnlySafe } from "./dateUtils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -1073,30 +1074,23 @@ export default function SoilTestsTab() {
             )}
             
             <div className="space-y-3">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="flex flex-wrap items-center gap-4">
-                        <h3 className="text-lg font-semibold text-green-900">
-                            {backendRecordsMode ? "Evidence across fields" : "Records"}
-                        </h3>
-                        {!backendRecordsMode && (
+                {!backendRecordsMode && (
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div className="flex flex-wrap items-center gap-4">
+                            <h3 className="text-lg font-semibold text-green-900">Records</h3>
                             <Tabs value={viewMode} onValueChange={setViewMode} className="w-auto">
                                 <TabsList>
                                     <TabsTrigger value="list" className="flex items-center gap-2">
                                         <List className="w-4 h-4" />
                                         List
                                     </TabsTrigger>
-                                    <TabsTrigger
-                                        value="grid"
-                                        className="flex items-center gap-2"
-                                    >
+                                    <TabsTrigger value="grid" className="flex items-center gap-2">
                                         <Grid3X3 className="w-4 h-4" />
                                         Grid
                                     </TabsTrigger>
                                 </TabsList>
                             </Tabs>
-                        )}
-                    </div>
-                    {!backendRecordsMode && (
+                        </div>
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1106,7 +1100,7 @@ export default function SoilTestsTab() {
                                         variant="default"
                                         id="export"
                                     >
-                                        <Download className="w-4 h-4 mr-2" />
+                                        <Download className="mr-2 h-4 w-4" />
                                         {isExporting ? "Exporting..." : "Export CSV"}
                                     </Button>
                                 </TooltipTrigger>
@@ -1117,55 +1111,68 @@ export default function SoilTestsTab() {
                                 )}
                             </Tooltip>
                         </TooltipProvider>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 {backendRecordsMode && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                        <Select value={recordFilters.field} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, field: value }))}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Field" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All fields</SelectItem>
-                                {filterOptions.fields.map((fieldName) => (
-                                    <SelectItem key={fieldName} value={fieldName}>{fieldName}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Select value={recordFilters.family} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, family: value }))}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Family" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All families</SelectItem>
-                                <SelectItem value="soil">Soil tests</SelectItem>
-                                <SelectItem value="yield">Yield tickets</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select value={recordFilters.crop} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, crop: value }))}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Crop" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All crops</SelectItem>
-                                {filterOptions.crops.map((crop) => (
-                                    <SelectItem key={crop} value={crop}>{crop}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Select value={recordFilters.status} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, status: value }))}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All statuses</SelectItem>
-                                {filterOptions.statuses.map((status) => (
-                                    <SelectItem key={status} value={status}>{status}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    <RecordsCollapsible
+                        storageKey="filters"
+                        title="Evidence across fields"
+                        sectionHelp="filters"
+                        defaultOpen
+                    >
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                            <Select value={recordFilters.field} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, field: value }))}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Field" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All fields</SelectItem>
+                                    {filterOptions.fields.map((fieldName) => (
+                                        <SelectItem key={fieldName} value={fieldName}>
+                                            {fieldName}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Select value={recordFilters.family} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, family: value }))}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Family" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All families</SelectItem>
+                                    <SelectItem value="soil">Soil tests</SelectItem>
+                                    <SelectItem value="yield">Yield tickets</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select value={recordFilters.crop} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, crop: value }))}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Crop" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All crops</SelectItem>
+                                    {filterOptions.crops.map((crop) => (
+                                        <SelectItem key={crop} value={crop}>
+                                            {crop}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Select value={recordFilters.status} onValueChange={(value) => setRecordFilters((prev) => ({ ...prev, status: value }))}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All statuses</SelectItem>
+                                    {filterOptions.statuses.map((status) => (
+                                        <SelectItem key={status} value={status}>
+                                            {status}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </RecordsCollapsible>
                 )}
             </div>
 
@@ -1181,14 +1188,12 @@ export default function SoilTestsTab() {
             ) : backendRecordsMode ? (
                 <>
                     {/* Upload records: backend status and extraction status drive UI */}
-                    <div className="space-y-4">
-                        <div>
-                            <h3 className="text-lg font-semibold text-green-900">Incoming documents & evidence</h3>
-                            <p className="text-sm text-slate-600">
-                                PDFs and uploads land here first. Review and fix until status is ready — then they appear
-                                as structured records below.
-                            </p>
-                        </div>
+                    <RecordsCollapsible
+                        storageKey="incoming"
+                        title="Incoming documents & evidence"
+                        sectionHelp="incoming"
+                        defaultOpen
+                    >
                         {filteredUploadRecords.length === 0 ? (
                             <Card className="text-center p-6">
                                 <p className="text-gray-600">
@@ -1199,7 +1204,7 @@ export default function SoilTestsTab() {
                                 <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-3 bg-green-600 hover:bg-green-700">Add data</Button>
                             </Card>
                         ) : (
-                            <div className="overflow-x-auto border rounded-lg bg-white">
+                            <div className="overflow-x-auto rounded-lg border bg-white">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -1294,25 +1299,20 @@ export default function SoilTestsTab() {
                                 </Table>
                             </div>
                         )}
-                    </div>
+                    </RecordsCollapsible>
                     {/* Saved records (normalized soil + yield) */}
-                    <div className="mt-10 space-y-6 border-t border-slate-200 pt-8">
-                        <p className="text-sm text-slate-600">
-                            Reviewed evidence becomes structured records. Use <strong>Standard</strong> for tables, or{" "}
-                            <strong>Data Sheet</strong> to customize columns — then export CSV from this section.
-                        </p>
+                    <div className="mt-10 border-t border-slate-200 pt-8">
+                    <RecordsCollapsible
+                        storageKey="saved"
+                        title="Saved records, data sheet & export"
+                        sectionHelp="saved"
+                        defaultOpen
+                        contentClassName="space-y-4"
+                    >
                         <div
                             id="export"
-                            className="flex flex-col gap-4 rounded-lg border border-slate-200/80 bg-white/60 p-4 shadow-sm lg:flex-row lg:items-start lg:justify-between"
+                            className="flex flex-col gap-4 rounded-lg border border-slate-200/80 bg-white/60 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-end"
                         >
-                            <div className="min-w-0 flex-1 space-y-1">
-                                <h3 className="text-lg font-semibold text-green-900">Saved records, data sheet & export</h3>
-                                {savedRecordsViewMode === "datasheet" && (
-                                    <p className="text-sm text-green-800/90">
-                                        Use the <strong>Family</strong> filter above to show all families, soil tests only, or yield tickets only.
-                                    </p>
-                                )}
-                            </div>
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end">
                                 <TooltipProvider>
                                     <Tooltip>
@@ -1344,8 +1344,8 @@ export default function SoilTestsTab() {
 
                             {savedRecordsViewMode === "datasheet" ? (
                                 <>
-                                    <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950 md:hidden">
-                                        Data Sheet is optimized for desktop. Switch to Standard or use a wider screen for the full spreadsheet.
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-3 text-sm text-amber-950 md:hidden">
+                                        Data Sheet works best on desktop — use Standard on small screens.
                                     </div>
                                     <div className="hidden md:block">
                                         <SavedRecordsDataSheet
@@ -1360,9 +1360,14 @@ export default function SoilTestsTab() {
                             ) : (
                                 <>
                             {filteredSavedSoil.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="text-md font-semibold text-green-800">Saved Soil Tests</h4>
-                                    <div className="overflow-x-auto border rounded-lg bg-white">
+                                <RecordsCollapsible
+                                    storageKey="saved-soil"
+                                    title="Saved Soil Tests"
+                                    sectionHelp="soil"
+                                    nested
+                                    defaultOpen
+                                >
+                                    <div className="overflow-x-auto rounded-lg border bg-white">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
@@ -1451,13 +1456,18 @@ export default function SoilTestsTab() {
                                             </TableBody>
                                         </Table>
                                     </div>
-                                </div>
+                                </RecordsCollapsible>
                             )}
 
                             {filteredSavedYield.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="text-md font-semibold text-green-800">Saved Yield Tickets</h4>
-                                    <div className="overflow-x-auto border rounded-lg bg-white">
+                                <RecordsCollapsible
+                                    storageKey="saved-yield"
+                                    title="Saved Yield Tickets"
+                                    sectionHelp="yield"
+                                    nested
+                                    defaultOpen
+                                >
+                                    <div className="overflow-x-auto rounded-lg border bg-white">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
@@ -1570,7 +1580,7 @@ export default function SoilTestsTab() {
                                             </TableBody>
                                         </Table>
                                     </div>
-                                </div>
+                                </RecordsCollapsible>
                             )}
                             {filteredSavedSoil.length === 0 && filteredSavedYield.length === 0 && (
                                 <Card className="mt-4 p-6 text-center">
@@ -1583,6 +1593,7 @@ export default function SoilTestsTab() {
                             )}
                                 </>
                             )}
+                    </RecordsCollapsible>
                     </div>
                 </>
             ) : (
