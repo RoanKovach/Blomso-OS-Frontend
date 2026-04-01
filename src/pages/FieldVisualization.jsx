@@ -18,7 +18,8 @@ import SSURGOLegend from "../components/visualization/SSURGOLegend";
 import FieldWorkbenchPanel from "../components/visualization/FieldWorkbenchPanel";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Layers, PanelLeft, Satellite, Sprout, MapPinned } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Layers, PanelLeft, MapPinned, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const FIELD_SOURCE = "fields-src";
@@ -34,11 +35,9 @@ const SAT_LAYER = "satellite-layer";
 const NDVI_LAYER = "ndvi-layer";
 const PARCELS_LAYER = "parcels-layer";
 
-/** Product defaults (override API defaults for normal UX) */
+/** User-toggleable overlay defaults. Satellite is always the base map (not toggled here). */
 const PRODUCT_LAYER_DEFAULTS = {
-    satellite: true,
-    ndvi: false,
-    parcels: true,
+    parcels: false,
 };
 
 const OUR_MAP_LAYER_IDS = new Set([
@@ -60,7 +59,6 @@ function isOurOrExtensionLayer(id) {
 
 /**
  * Hide built-in style layers (cartoon vector basemap) so satellite / overlays read as the base experience.
- * Remembers ids so we can restore when the user turns satellite off.
  */
 function suppressCartoonBasemap(map, hiddenIdsRef) {
     hiddenIdsRef.current = [];
@@ -75,17 +73,6 @@ function suppressCartoonBasemap(map, hiddenIdsRef) {
             /* layer may not support visibility */
         }
     }
-}
-
-function restoreCartoonBasemap(map, hiddenIdsRef) {
-    for (const id of hiddenIdsRef.current) {
-        try {
-            map.setLayoutProperty(id, "visibility", "visible");
-        } catch {
-            /* ignore */
-        }
-    }
-    hiddenIdsRef.current = [];
 }
 
 function boundsFromPolygonGeometry(geometry) {
@@ -152,8 +139,6 @@ function FieldVisualizationContent() {
     const [layerToggle, setLayerToggle] = useState({ ...PRODUCT_LAYER_DEFAULTS });
     /** Increments on every field select (including re-clicking the same field) so fitBounds always runs */
     const [fieldSelectionSeq, setFieldSelectionSeq] = useState(0);
-    /** True when NDVI uses the same tile URLs as satellite or is missing — do not label as real NDVI */
-    const [ndviIsPlaceholder, setNdviIsPlaceholder] = useState(false);
     /** Bumps FieldWorkbenchPanel evidence refresh when linking completes */
     const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
 
@@ -213,6 +198,7 @@ function FieldVisualizationContent() {
 
             const defs = PRODUCT_LAYER_DEFAULTS;
 
+            /** Satellite is the fixed base imagery layer (not exposed as an optional overlay toggle). */
             const addRaster = (sourceId, spec, layerId, defaultVisible, opacity) => {
                 if (!spec?.tiles?.length) return;
                 const tileSize = spec.tileSize ?? 256;
@@ -242,7 +228,7 @@ function FieldVisualizationContent() {
                 map.addLayer(layerDef);
             };
 
-            addRaster("satellite-src", L.satellite, SAT_LAYER, defs.satellite, null);
+            addRaster("satellite-src", L.satellite, SAT_LAYER, true, null);
 
             const satTiles = L.satellite?.tiles;
             const ndviTiles = L.ndvi?.tiles;
@@ -251,9 +237,8 @@ function FieldVisualizationContent() {
                 (satTiles?.length &&
                     ndviTiles.length === satTiles.length &&
                     JSON.stringify(satTiles) === JSON.stringify(ndviTiles));
-            setNdviIsPlaceholder(ndviDuplicateOrMissing);
             if (!ndviDuplicateOrMissing) {
-                addRaster("ndvi-src", L.ndvi, NDVI_LAYER, defs.ndvi, L.ndvi?.opacity);
+                addRaster("ndvi-src", L.ndvi, NDVI_LAYER, false, L.ndvi?.opacity);
             }
 
             addRaster("parcels-src", L.parcels, PARCELS_LAYER, defs.parcels, null);
@@ -335,7 +320,7 @@ function FieldVisualizationContent() {
                 },
             });
 
-            if (defs.satellite && map.getLayer(SAT_LAYER)) {
+            if (map.getLayer(SAT_LAYER)) {
                 suppressCartoonBasemap(map, basemapHiddenLayerIdsRef);
             }
 
@@ -725,19 +710,10 @@ function FieldVisualizationContent() {
     const toggleRasterLayer = (layerId, key) => {
         const map = mapRef.current;
         if (!map?.loaded?.() || !map.getLayer(layerId)) return;
-        if (layerId === NDVI_LAYER && ndviIsPlaceholder) return;
         const vis = map.getLayoutProperty(layerId, "visibility");
         const next = vis === "visible" ? "none" : "visible";
         map.setLayoutProperty(layerId, "visibility", next);
         setLayerToggle((prev) => ({ ...prev, [key]: next === "visible" }));
-
-        if (layerId === SAT_LAYER && map.getLayer(SAT_LAYER)) {
-            if (next === "visible") {
-                suppressCartoonBasemap(map, basemapHiddenLayerIdsRef);
-            } else {
-                restoreCartoonBasemap(map, basemapHiddenLayerIdsRef);
-            }
-        }
     };
 
     const layerControlBtn =
@@ -762,9 +738,6 @@ function FieldVisualizationContent() {
                     canFinishDrawing={drawingPoints.length >= 1}
                     onUploadShapefile={() => setShowShapefileModal(true)}
                     onSoilTestLinked={handleSoilTestLinked}
-                    showSSURGO={showSSURGO}
-                    onSSURGOToggle={handleSSURGOToggle}
-                    ssurgoLoading={ssurgoLoading}
                 />
             </div>
 
@@ -807,9 +780,6 @@ function FieldVisualizationContent() {
                                     setIsMobileSidebarOpen(false);
                                 }}
                                 onSoilTestLinked={handleSoilTestLinked}
-                                showSSURGO={showSSURGO}
-                                onSSURGOToggle={handleSSURGOToggle}
-                                ssurgoLoading={ssurgoLoading}
                             />
                         </SheetContent>
                     </Sheet>
@@ -834,44 +804,58 @@ function FieldVisualizationContent() {
                             role="group"
                             aria-label="Map overlays"
                         >
-                            <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/90 px-3 py-2">
-                                <Layers className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
-                                <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                                    Layers
-                                </span>
+                            <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                    <Layers className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
+                                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                        Layers
+                                    </span>
+                                </div>
+                                <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                                    Satellite imagery is the base map. Optional overlays below.
+                                </p>
                             </div>
                             <div className="flex flex-col gap-0.5 p-1.5">
-                                <button
-                                    type="button"
-                                    className={`${layerControlBtn} ${
-                                        layerToggle.satellite
-                                            ? "bg-slate-900 text-white shadow-sm"
-                                            : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
-                                    }`}
-                                    onClick={() => toggleRasterLayer(SAT_LAYER, "satellite")}
-                                >
-                                    <Satellite className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                                    <span>Satellite</span>
-                                </button>
-                                {ndviIsPlaceholder ? (
-                                    <p className="px-2.5 py-1.5 text-[11px] leading-snug text-slate-500" role="note">
-                                        Vegetation index (NDVI): not available as a separate layer yet — requires a
-                                        distinct source from satellite imagery.
+                                <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id="layers-ssurgo"
+                                                checked={showSSURGO}
+                                                onChange={(e) => handleSSURGOToggle(e.target.checked)}
+                                                className="rounded border-gray-300"
+                                                disabled={ssurgoLoading}
+                                                aria-label="SSURGO soil types overlay"
+                                            />
+                                            <label
+                                                htmlFor="layers-ssurgo"
+                                                className="cursor-pointer text-xs text-slate-800"
+                                                title="USDA soil-series polygons (reference overlay)"
+                                            >
+                                                SSURGO soil types
+                                            </label>
+                                            <Badge
+                                                variant="outline"
+                                                className="shrink-0 border-amber-200 bg-amber-50 text-[10px] text-amber-800"
+                                            >
+                                                Demo
+                                            </Badge>
+                                        </div>
+                                        {ssurgoLoading && (
+                                            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-500" />
+                                        )}
+                                    </div>
+                                    <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                                        Reference only — not a substitute for uploaded soil test evidence.
                                     </p>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        className={`${layerControlBtn} ${
-                                            layerToggle.ndvi
-                                                ? "bg-emerald-700 text-white shadow-sm"
-                                                : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
-                                        }`}
-                                        onClick={() => toggleRasterLayer(NDVI_LAYER, "ndvi")}
-                                    >
-                                        <Sprout className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                                        <span>NDVI</span>
-                                    </button>
-                                )}
+                                </div>
+                                <p
+                                    className="rounded-lg px-2.5 py-2 text-[11px] leading-snug text-slate-500"
+                                    role="note"
+                                >
+                                    NDVI (vegetation index): not available yet — coming later.
+                                </p>
                                 <button
                                     type="button"
                                     className={`${layerControlBtn} ${

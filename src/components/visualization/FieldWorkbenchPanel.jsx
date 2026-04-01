@@ -25,7 +25,7 @@ function pickLatest(records, dateKeys) {
 }
 
 /**
- * Field story strip above the map: latest evidence + links to add data, unified records, export.
+ * Compact field header: name, light context, primary actions (Add data, All records, Export).
  */
 export default function FieldWorkbenchPanel({ field, evidenceKey = 0 }) {
     const [loading, setLoading] = useState(false);
@@ -72,93 +72,66 @@ export default function FieldWorkbenchPanel({ field, evidenceKey = 0 }) {
 
     const uploadHref = `${createPageUrl("Upload")}?fieldId=${encodeURIComponent(field.id)}`;
 
+    let soilLine = "—";
+    if (loading) soilLine = "…";
+    else if (soilLatest) {
+        soilLine = `${soilLatest.test_date ? new Date(soilLatest.test_date).toLocaleDateString() : "Saved"} · ${soilLatest.zone_name || "Soil test"}`;
+    } else soilLine = "None yet";
+
+    let yieldLine = "—";
+    if (loading) yieldLine = "…";
+    else if (yieldLatest) {
+        const td = yieldLatest.ticket_date || yieldLatest.ticketDate;
+        yieldLine = `${td && !Number.isNaN(new Date(td).getTime()) ? new Date(td).toLocaleDateString() : "Saved"} · Yield`;
+    } else yieldLine = "None yet";
+
     return (
-        <div className="shrink-0 border-b border-slate-200/90 bg-white/95 px-4 py-3 shadow-sm backdrop-blur-sm md:px-5">
-            <div className="mx-auto flex max-w-6xl flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                        <h2 className="truncate text-lg font-semibold text-slate-900">{name}</h2>
+        <div className="shrink-0 border-b border-slate-200/80 bg-white px-3 py-2 md:px-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="truncate text-base font-semibold tracking-tight text-slate-900">{name}</h2>
                         {acres != null && acres !== "" && (
-                            <Badge variant="secondary" className="font-normal">
+                            <Badge variant="secondary" className="font-normal text-xs">
                                 {typeof acres === "number" ? `${acres.toFixed(1)} ac` : `${acres} ac`}
                             </Badge>
                         )}
                         {crop && (
-                            <span className="text-sm text-slate-600">
-                                <Sprout className="mr-1 inline h-3.5 w-3.5 text-emerald-600" />
+                            <span className="text-xs text-slate-600">
+                                <Sprout className="mr-1 inline h-3 w-3 text-emerald-600" />
                                 {crop}
                             </span>
                         )}
                     </div>
-                    <p className="text-xs text-slate-500">
-                        Evidence for this field — map below for location context.
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                        Latest evidence — soil: {soilLine} · yield: {yieldLine}
                     </p>
-                    <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-                        <div className="rounded-md border border-slate-100 bg-slate-50/80 px-3 py-2">
-                            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                                Latest soil evidence
-                            </div>
-                            {loading ? (
-                                <p className="text-slate-400">Loading…</p>
-                            ) : soilLatest ? (
-                                <p className="truncate">
-                                    {soilLatest.test_date
-                                        ? new Date(soilLatest.test_date).toLocaleDateString()
-                                        : "Saved"}{" "}
-                                    · {soilLatest.zone_name || "Soil test"}
-                                </p>
-                            ) : (
-                                <p className="text-slate-500">None yet — add a soil test PDF.</p>
-                            )}
-                        </div>
-                        <div className="rounded-md border border-slate-100 bg-slate-50/80 px-3 py-2">
-                            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                                Latest yield evidence
-                            </div>
-                            {loading ? (
-                                <p className="text-slate-400">Loading…</p>
-                            ) : yieldLatest ? (
-                                <p className="truncate">
-                                    {(yieldLatest.ticket_date || yieldLatest.ticketDate) &&
-                                    !Number.isNaN(
-                                        new Date(
-                                            yieldLatest.ticket_date || yieldLatest.ticketDate
-                                        ).getTime()
-                                    )
-                                        ? new Date(
-                                              yieldLatest.ticket_date || yieldLatest.ticketDate
-                                          ).toLocaleDateString()
-                                        : "Saved"}{" "}
-                                    · Yield ticket
-                                </p>
-                            ) : (
-                                <p className="text-slate-500">None yet — add yield evidence from Add Data.</p>
-                            )}
-                        </div>
-                    </div>
                 </div>
-                <div className="flex flex-shrink-0 flex-wrap gap-2 md:justify-end">
-                    <Button asChild size="sm" className="bg-emerald-700 hover:bg-emerald-800">
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+                    <Button asChild size="sm" className="h-8 bg-emerald-700 px-3 text-xs hover:bg-emerald-800">
                         <Link to={uploadHref}>
-                            <Upload className="mr-1.5 h-4 w-4" />
+                            <Upload className="mr-1 h-3.5 w-3.5" />
                             Add data
                         </Link>
                     </Button>
-                    <Button asChild variant="outline" size="sm">
+                    <Button asChild variant="outline" size="sm" className="h-8 px-3 text-xs">
                         <Link to={createPageUrl("MyRecords")}>
-                            <Database className="mr-1.5 h-4 w-4" />
+                            <Database className="mr-1 h-3.5 w-3.5" />
                             All records
                         </Link>
                     </Button>
-                    <Button asChild variant="outline" size="sm" className="text-slate-700">
+                    <Button asChild variant="outline" size="sm" className="h-8 px-3 text-xs text-slate-700">
                         <Link to={`${createPageUrl("MyRecords")}#export`}>
-                            <FileDown className="mr-1.5 h-4 w-4" />
+                            <FileDown className="mr-1 h-3.5 w-3.5" />
                             Export
                         </Link>
                     </Button>
-                    <Button asChild variant="ghost" size="sm" className="text-slate-600">
-                        <Link to={createPageUrl("Recommendations")}>Insights</Link>
-                    </Button>
+                    <Link
+                        to={createPageUrl("Recommendations")}
+                        className="px-2 text-[11px] text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+                    >
+                        Insights
+                    </Link>
                 </div>
             </div>
         </div>

@@ -1,20 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Link2, Calendar, MapPin } from 'lucide-react';
 import { suggestSoilTestLinks } from '@/api/functions';
 import { linkSoilTestsToField } from '@/api/functions';
 import { useToasts } from '@/components/hooks/useToasts';
+
+const CONFIDENCE_SHOW_MIN = 0.5;
+const CONFIDENCE_STRONG = 0.7;
 
 export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
   const [suggestions, setSuggestions] = useState([]);
   const [selectedTests, setSelectedTests] = useState(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
-  const [matchSummary, setMatchSummary] = useState(null);
   const { toast } = useToasts();
+
+  const visibleSuggestions = useMemo(
+    () =>
+      suggestions.filter((s) => (s.confidence_score ?? 0) >= CONFIDENCE_SHOW_MIN),
+    [suggestions]
+  );
+
+  const hasStrongMatch = useMemo(
+    () => visibleSuggestions.some((s) => (s.confidence_score ?? 0) >= CONFIDENCE_STRONG),
+    [visibleSuggestions]
+  );
 
   const loadSuggestions = async () => {
     if (!selectedField) return;
@@ -24,12 +36,12 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
       const { data } = await suggestSoilTestLinks({ field_id: selectedField.id });
 
       if (data.success) {
-        setSuggestions(data.suggested_matches || []);
-        setMatchSummary(data.match_summary);
+        const list = data.suggested_matches || [];
+        setSuggestions(list);
 
-        const highConfidenceIds = (data.suggested_matches || [])
-          .filter(match => match.confidence_score >= 0.7)
-          .map(match => match.soil_test_id);
+        const highConfidenceIds = list
+          .filter((match) => (match.confidence_score ?? 0) >= CONFIDENCE_STRONG)
+          .map((match) => match.soil_test_id);
         setSelectedTests(new Set(highConfidenceIds));
       } else {
         throw new Error(data.error || 'Failed to fetch suggestions');
@@ -49,7 +61,6 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
     } else {
       setSuggestions([]);
       setSelectedTests(new Set());
-      setMatchSummary(null);
     }
   }, [selectedField]);
 
@@ -105,8 +116,8 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
   };
 
   const getConfidenceBadge = (score) => {
-    if (score >= 0.7) return <Badge className="bg-green-100 text-green-800">High</Badge>;
-    if (score >= 0.5) return <Badge className="bg-yellow-100 text-yellow-800">Medium</Badge>;
+    if (score >= CONFIDENCE_STRONG) return <Badge className="bg-green-100 text-green-800">High</Badge>;
+    if (score >= CONFIDENCE_SHOW_MIN) return <Badge className="bg-yellow-100 text-yellow-800">Medium</Badge>;
     return <Badge className="bg-gray-100 text-gray-800">Low</Badge>;
   };
 
@@ -114,45 +125,41 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
     return null;
   }
 
+  if (!isLoading && suggestions.length > 0 && visibleSuggestions.length === 0) {
+    return null;
+  }
+
+  const heading = hasStrongMatch ? 'Possible soil evidence' : 'Potential matches';
+  const sub =
+    'Suggested from your records — only attach tests you are confident belong to this field.';
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 shadow-sm">
+    <div className="rounded-md border border-slate-100 bg-white/90 p-2.5">
       <div className="mb-2 flex items-start gap-2">
-        <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" aria-hidden />
+        <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-slate-900">Unlinked soil tests for this field</h3>
-          <p className="text-xs text-slate-600">
-            Attach evidence that matches <span className="font-medium text-slate-800">{selectedField.field_name}</span>.
-          </p>
+          <h3 className="text-xs font-semibold text-slate-700">{heading}</h3>
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{sub}</p>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 py-4 text-sm text-slate-600">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Looking for matches…</span>
+        <div className="flex items-center gap-2 py-3 text-xs text-slate-500">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Checking for matches…</span>
         </div>
       ) : suggestions.length === 0 ? (
-        <Alert className="border-slate-200 bg-white py-2">
-          <AlertDescription className="text-xs text-slate-600">
-            No unlinked soil tests match this field right now. Add PDFs under My Records, then check back.
-          </AlertDescription>
-        </Alert>
+        <p className="py-1 text-[11px] leading-snug text-slate-500">
+          No suggested soil tests for this field right now. Add PDFs under My Records, then check back.
+        </p>
       ) : (
         <div className="space-y-2">
-          {matchSummary && (
-            <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
-              <span>High: {matchSummary.high_confidence}</span>
-              <span>Med: {matchSummary.medium_confidence}</span>
-              <span>Low: {matchSummary.low_confidence}</span>
-            </div>
-          )}
-
-          <div className="max-h-48 space-y-2 overflow-y-auto pr-0.5">
-            {suggestions.map((suggestion) => {
+          <div className="max-h-40 space-y-1.5 overflow-y-auto pr-0.5">
+            {visibleSuggestions.map((suggestion) => {
               const details = suggestion.soil_test_details || {};
               const loc = details.location;
               return (
-                <div key={suggestion.soil_test_id} className="rounded-md border border-slate-200/80 bg-white p-2">
+                <div key={suggestion.soil_test_id} className="rounded border border-slate-100 bg-slate-50/80 p-2">
                   <div className="flex items-start gap-2">
                     <Checkbox
                       checked={selectedTests.has(suggestion.soil_test_id)}
@@ -161,10 +168,10 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate text-sm font-medium text-slate-900">{suggestion.soil_test_name}</span>
+                        <span className="truncate text-xs font-medium text-slate-800">{suggestion.soil_test_name}</span>
                         {getConfidenceBadge(suggestion.confidence_score)}
                       </div>
-                      <div className="mt-1 space-y-0.5 text-[11px] text-slate-500">
+                      <div className="mt-1 space-y-0.5 text-[10px] text-slate-500">
                         {suggestion.test_date && (
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3 shrink-0" />
@@ -191,12 +198,12 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
             })}
           </div>
 
-          <div className="flex gap-2 border-t border-slate-200/80 pt-2">
+          <div className="flex gap-2 border-t border-slate-100 pt-2">
             <Button
               size="sm"
               onClick={handleLinkSelected}
               disabled={selectedTests.size === 0 || isLinking}
-              className="flex-1"
+              className="h-8 flex-1 text-xs"
             >
               {isLinking && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
               Attach selected ({selectedTests.size})
@@ -206,6 +213,7 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
               variant="outline"
               onClick={() => setSelectedTests(new Set())}
               disabled={selectedTests.size === 0}
+              className="h-8 text-xs"
             >
               Clear
             </Button>

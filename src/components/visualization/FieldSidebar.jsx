@@ -15,9 +15,7 @@ import {
   X,
   Info,
   Pencil,
-  FileUp,
-  Layers3,
-  Loader2
+  FileUp
 } from 'lucide-react';
 
 // Import the linking panel component
@@ -45,12 +43,7 @@ export default function FieldSidebar({
   onUploadShapefile,
   
   // New prop for linking callback
-  onSoilTestLinked,
-
-  // New SSURGO props
-  showSSURGO,
-  onSSURGOToggle,
-  ssurgoLoading
+  onSoilTestLinked
 }) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -139,46 +132,6 @@ export default function FieldSidebar({
       {/* Scrollable Content Area */}
       <ScrollArea className="flex-1">
         <div className="space-y-3 p-3">
-          {/* Map Layers Section - Only show when in view mode and field is selected */}
-          {selectedField && mode === 'view' && (
-            <Card className="mb-3 border-slate-200/80 bg-slate-50/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  <Layers3 className="h-4 w-4 text-slate-500" />
-                  Map context (optional)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 pt-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="ssurgo-layer"
-                      checked={showSSURGO}
-                      onChange={(e) => onSSURGOToggle(e.target.checked)}
-                      className="rounded border-gray-300"
-                      disabled={ssurgoLoading}
-                    />
-                    <label
-                      htmlFor="ssurgo-layer"
-                      className="cursor-pointer text-sm text-gray-700"
-                      title="USDA soil-series polygons (demo overlay)"
-                    >
-                      SSURGO soil types
-                    </label>
-                    <Badge variant="outline" className="border-amber-200 bg-amber-50 text-xs text-amber-800">Demo</Badge>
-                  </div>
-                  {ssurgoLoading && (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                  )}
-                </div>
-                <p className="text-xs text-slate-500">
-                  Reference layer only — not a substitute for your uploaded soil test evidence.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Fields List */}
           <div>
             {isLoading ? (
@@ -260,7 +213,7 @@ export default function FieldSidebar({
           </div>
 
           {selectedField && mode === 'view' && (
-            <div className="mt-2">
+            <div className="mt-3 border-t border-slate-100 pt-3">
               <SoilTestLinkingPanel selectedField={selectedField} onLinked={onSoilTestLinked} />
             </div>
           )}
