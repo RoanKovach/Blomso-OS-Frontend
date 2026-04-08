@@ -7,6 +7,7 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from './client.js';
+import { reextractDocument } from './documents.js';
 
 export async function listRecords() {
   if (!isApiConfigured()) {
@@ -57,16 +58,15 @@ export async function deleteRecord(id) {
 }
 
 /**
- * Trigger extraction for an upload (POST /extractions/{id}). Returns 202 when started.
- * @param {string} id - Upload record id
+ * Trigger re-extraction for a document (POST /documents/{id}/reextract).
+ * @param {string} id - Document / upload record id
  * @returns {Promise<{ ok: boolean, id?: string, message?: string }>}
  */
 export async function triggerExtraction(id) {
   if (!isApiConfigured() || !id) {
     return { ok: false };
   }
-  const res = await apiPost(`/extractions/${id}`, {});
-  return res && res.ok ? res : { ok: false };
+  return reextractDocument(id);
 }
 
 /**

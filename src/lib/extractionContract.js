@@ -3,7 +3,7 @@
  * Used by backend-path review UI: extraction output -> review/edit -> normalized save payload.
  *
  * C1 (extraction API contract):
- * - GET /extractions/:id returns ExtractionArtifact. Frontend getExtraction(uploadId) calls it; on failure or empty returns { soil_tests: [] } so UI shows real state.
+ * - GET /documents/:id/extraction returns ExtractionArtifact. getExtraction(uploadId) uses getDocumentExtraction(); on failure or empty returns { soil_tests: [] } so UI shows real state.
  *
  * D1 (extraction artifact shape):
  * - Backend extraction returns { soil_tests: SoilTestCandidate[], uploadId?, ... }.

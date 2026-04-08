@@ -1,14 +1,15 @@
 /**
  * Extraction API for backend upload path.
- * When API is configured we use backend truth only; no stub so UI does not imply success without real data.
+ * Uses GET /documents/{id}/extraction (documents domain); behavior matches prior getExtraction consumers.
  */
 
-import { apiGet, apiPost, isApiConfigured } from './client.js';
+import { apiPost, isApiConfigured } from './client.js';
+import { getDocumentExtraction } from './documents.js';
 
 /**
- * Fetch extraction artifact for an upload (backend contract: artifact may have soil_tests or payload.soil_tests).
- * When API is configured: no stub fallback — on failure or missing soil_tests returns { soil_tests: [] } so UI shows real state.
- * @param {string} uploadId - Record id from GET /records or upload complete
+ * Fetch extraction artifact for an upload/document (artifact may have soil_tests or payload.soil_tests).
+ * When API is configured: on failure or missing soil_tests returns { soil_tests: [] } so UI shows real state.
+ * @param {string} uploadId - Document / record id from GET /records or upload complete
  * @returns {Promise<{ soil_tests: Array, uploadId?: string, parserVersion?: string }>}
  */
 export async function getExtraction(uploadId) {
@@ -17,7 +18,7 @@ export async function getExtraction(uploadId) {
   }
   if (isApiConfigured()) {
     try {
-      const res = await apiGet(`/extractions/${uploadId}`);
+      const res = await getDocumentExtraction(uploadId);
       if (res && res.ok !== false) {
         const soil_tests = Array.isArray(res.soil_tests)
           ? res.soil_tests
@@ -27,8 +28,6 @@ export async function getExtraction(uploadId) {
         if (soil_tests.length === 0 && typeof console?.debug === 'function') {
           console.debug('[extraction] Artifact loaded but no soil_tests (placeholder or empty)', { uploadId, parserVersion: res.parserVersion });
         }
-        // Preserve the full backend response (including yield_tickets or other fields)
-        // while still exposing a normalized soil_tests array for existing callers.
         return {
           ...res,
           soil_tests,
@@ -37,7 +36,7 @@ export async function getExtraction(uploadId) {
         };
       }
     } catch (_) {
-      // Backend endpoint may not exist or failed; return empty so UI shows "no data" not fake success
+      /* endpoint missing or failed — empty state */
     }
     return { soil_tests: [], uploadId };
   }
