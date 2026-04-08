@@ -76,6 +76,19 @@ function suppressCartoonBasemap(map, hiddenIdsRef) {
     }
 }
 
+/** Same math as maplibre-gl `DOM.getPoint` — `map.unproject` expects this pixel space. */
+function pixelPointOnCanvasContainer(containerEl, clientX, clientY) {
+    const rect = containerEl.getBoundingClientRect();
+    const scaleX = (rect.width / containerEl.offsetWidth) || 1;
+    const scaleY = (rect.height / containerEl.offsetHeight) || 1;
+    const x = (clientX - rect.left) / scaleX - containerEl.clientLeft;
+    const y = (clientY - rect.top) / scaleY - containerEl.clientTop;
+    return [x, y];
+}
+
+/** Max pointer movement (px) from down→up to count as a tap (not a pan). */
+const DRAW_VERTEX_MAX_MOVE_PX = 16;
+
 function boundsFromPolygonGeometry(geometry) {
     if (!geometry || geometry.type !== "Polygon") return null;
     const ring = geometry.coordinates[0];
@@ -104,6 +117,13 @@ function FieldVisualizationContent() {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
     const drawingMarkersRef = useRef([]);
+    const fieldDrawRef = useRef({
+        mode: "view",
+        showCreationModal: false,
+        drawInteraction: "place",
+    });
+    /** Primary pointer for draw tap (down position + id). */
+    const drawPointerDownRef = useRef(null);
     const basemapHiddenLayerIdsRef = useRef([]);
 
     const [mapConfig, setMapConfig] = useState(null);
@@ -198,6 +218,8 @@ function FieldVisualizationContent() {
             style: styleUrl,
             center: [lon, lat],
             zoom: z,
+            /** Default 3px is very strict; small hand jitter suppresses `click` entirely. */
+            clickTolerance: 24,
         });
 
         mapRef.current = map;
@@ -507,6 +529,10 @@ function FieldVisualizationContent() {
         [trackUserAction]
     );
 
+    useLayoutEffect(() => {
+        fieldDrawRef.current = { mode, showCreationModal, drawInteraction };
+    }, [mode, showCreationModal, drawInteraction]);
+
     useEffect(() => {
         if (hasProcessedDeepLink) return;
 
@@ -617,26 +643,83 @@ function FieldVisualizationContent() {
         }
     }, [mapReady, mode, showCreationModal, drawInteraction]);
 
+    /**
+     * Vertices: listen on the WebGL canvas with pointerdown/up.
+     * MapLibre's synthetic `click` often never fires (3px tolerance, handler ordering).
+     */
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!mapReady || !map?.loaded?.()) return;
+        const canvas = map.getCanvas();
+        if (!canvas) return;
+
+        const clearDown = () => {
+            drawPointerDownRef.current = null;
+        };
+
+        const onPointerDown = (e) => {
+            const s = fieldDrawRef.current;
+            if (s.mode !== "draw" || s.showCreationModal || s.drawInteraction !== "place") {
+                clearDown();
+                return;
+            }
+            if (e.pointerType === "mouse" && e.button !== 0) return;
+            drawPointerDownRef.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
+        };
+
+        const onPointerUp = (e) => {
+            const s = fieldDrawRef.current;
+            if (s.mode !== "draw" || s.showCreationModal || s.drawInteraction !== "place") {
+                clearDown();
+                return;
+            }
+            const down = drawPointerDownRef.current;
+            if (!down || e.pointerId !== down.pointerId) return;
+            clearDown();
+
+            const dist = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+            if (dist > DRAW_VERTEX_MAX_MOVE_PX) return;
+
+            const container = map.getCanvasContainer();
+            const [x, y] = pixelPointOnCanvasContainer(container, e.clientX, e.clientY);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+            let ll;
+            try {
+                ll = map.unproject([x, y]);
+            } catch {
+                return;
+            }
+            const lng = ll.lng;
+            const lat = ll.lat;
+            if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+
+            setDrawingPoints((prev) => {
+                const next = [...prev, { lng, lat }];
+                trackUserAction("drawing_point_added", { point_count: next.length });
+                return next;
+            });
+        };
+
+        canvas.addEventListener("pointerdown", onPointerDown, { passive: true });
+        canvas.addEventListener("pointerup", onPointerUp, { passive: true });
+        canvas.addEventListener("pointercancel", clearDown, { passive: true });
+        canvas.addEventListener("lostpointercapture", clearDown, { passive: true });
+
+        return () => {
+            canvas.removeEventListener("pointerdown", onPointerDown);
+            canvas.removeEventListener("pointerup", onPointerUp);
+            canvas.removeEventListener("pointercancel", clearDown);
+            canvas.removeEventListener("lostpointercapture", clearDown);
+        };
+    }, [mapReady, trackUserAction]);
+
     useEffect(() => {
         const map = mapRef.current;
         if (!mapReady || !map?.loaded?.()) return;
 
         const onClick = (e) => {
-            if (mode === "draw" && !showCreationModal) {
-                if (drawInteraction === "place") {
-                    const ll = e.lngLat;
-                    const lng = ll.lng;
-                    const lat = ll.lat;
-                    if (Number.isFinite(lng) && Number.isFinite(lat)) {
-                        setDrawingPoints((prev) => {
-                            const next = [...prev, { lng, lat }];
-                            trackUserAction("drawing_point_added", { point_count: next.length });
-                            return next;
-                        });
-                    }
-                }
-                return;
-            }
+            if (mode === "draw") return;
             const fieldFeats = map.queryRenderedFeatures(e.point, { layers: [FIELDS_FILL] });
             if (fieldFeats.length) {
                 const id = fieldFeats[0].properties?.id;
@@ -662,7 +745,7 @@ function FieldVisualizationContent() {
             map.off("click", onClick);
             map.off("mousemove", onMove);
         };
-    }, [mapReady, mode, showCreationModal, drawInteraction, fieldsList, handleFieldSelect, trackUserAction]);
+    }, [mapReady, mode, showCreationModal, drawInteraction, fieldsList, handleFieldSelect]);
 
     const handleModeChange = (newMode) => {
         if (newMode === "view" && mode === "draw") {
