@@ -76,6 +76,19 @@ function suppressCartoonBasemap(map, hiddenIdsRef) {
     }
 }
 
+/**
+ * Same coordinate space as MapLibre's DOM.mousePos / DOM.getPoint (see maplibre DOM class).
+ * Without scale + clientLeft/clientTop, unproject() is wrong and markers/lines won't match the map.
+ */
+function pointerPointInMapContainer(containerEl, clientX, clientY) {
+    const rect = containerEl.getBoundingClientRect();
+    const scaleX = rect.width / containerEl.offsetWidth || 1;
+    const scaleY = rect.height / containerEl.offsetHeight || 1;
+    const x = (clientX - rect.left) / scaleX - containerEl.clientLeft;
+    const y = (clientY - rect.top) / scaleY - containerEl.clientTop;
+    return [x, y];
+}
+
 function boundsFromPolygonGeometry(geometry) {
     if (!geometry || geometry.type !== "Polygon") return null;
     const ring = geometry.coordinates[0];
@@ -472,6 +485,15 @@ function FieldVisualizationContent() {
                     coordinates: [ring],
                 },
             });
+        } else if (drawingPoints.length >= 2) {
+            src.setData({
+                type: "Feature",
+                properties: {},
+                geometry: {
+                    type: "LineString",
+                    coordinates: drawingPoints.map((p) => [p.lng, p.lat]),
+                },
+            });
         } else {
             src.setData({ type: "FeatureCollection", features: [] });
         }
@@ -629,19 +651,25 @@ function FieldVisualizationContent() {
     useEffect(() => {
         const map = mapRef.current;
         if (!mapReady || !map?.loaded?.()) return;
-        const canvas = map.getCanvas();
-        if (!canvas) return;
+        const container = map.getCanvasContainer();
+        if (!container) return;
 
         const onPointerDownCapture = (e) => {
             const { mode: m, showCreationModal: modalOpen, drawInteraction: di } = fieldDrawRef.current;
             if (m !== "draw" || modalOpen || di !== "place") return;
             if (e.pointerType === "mouse" && e.button !== 0) return;
 
-            const wrap = map.getCanvasContainer();
-            const rect = wrap.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
+            const [x, y] = pointerPointInMapContainer(container, e.clientX, e.clientY);
+            if (
+                x < 0 ||
+                y < 0 ||
+                x > container.offsetWidth ||
+                y > container.offsetHeight ||
+                !Number.isFinite(x) ||
+                !Number.isFinite(y)
+            ) {
+                return;
+            }
 
             e.preventDefault();
             e.stopPropagation();
@@ -654,6 +682,7 @@ function FieldVisualizationContent() {
             }
             const lng = lngLat.lng;
             const lat = lngLat.lat;
+            if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
             setDrawingPoints((prev) => {
                 const next = [...prev, { lng, lat }];
@@ -662,9 +691,9 @@ function FieldVisualizationContent() {
             });
         };
 
-        canvas.addEventListener("pointerdown", onPointerDownCapture, { capture: true });
+        container.addEventListener("pointerdown", onPointerDownCapture, { capture: true });
         return () => {
-            canvas.removeEventListener("pointerdown", onPointerDownCapture, { capture: true });
+            container.removeEventListener("pointerdown", onPointerDownCapture, { capture: true });
         };
     }, [mapReady, trackUserAction]);
 
@@ -797,6 +826,7 @@ function FieldVisualizationContent() {
         if (!isCreating) {
             setShowCreationModal(false);
             setDrawingPoints([]);
+            setDrawInteraction("place");
             setMode("view");
         }
     };
