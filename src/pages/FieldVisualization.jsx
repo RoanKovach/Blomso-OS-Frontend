@@ -575,21 +575,26 @@ function FieldVisualizationContent() {
         if (!mapReady || !map?.loaded?.()) return;
 
         const onClick = (e) => {
+            // In draw mode, map clicks must add vertices — not select fields underneath.
+            if (mode === "draw" && !showCreationModal) {
+                handleMapClick({
+                    lngLat: { lng: e.lngLat.lng, lat: e.lngLat.lat },
+                });
+                return;
+            }
             const fieldFeats = map.queryRenderedFeatures(e.point, { layers: [FIELDS_FILL] });
             if (fieldFeats.length) {
                 const id = fieldFeats[0].properties?.id;
                 const field = fieldsList.find((f) => f.id === id);
                 if (field) handleFieldSelect(field);
-                return;
-            }
-            if (mode === "draw" && !showCreationModal) {
-                handleMapClick({
-                    lngLat: { lng: e.lngLat.lng, lat: e.lngLat.lat },
-                });
             }
         };
 
         const onMove = (e) => {
+            if (mode === "draw" && !showCreationModal) {
+                map.getCanvas().style.cursor = "crosshair";
+                return;
+            }
             const feats = map.queryRenderedFeatures(e.point, { layers: [FIELDS_FILL] });
             map.getCanvas().style.cursor = feats.length ? "pointer" : "";
         };
@@ -748,7 +753,7 @@ function FieldVisualizationContent() {
                     drawingPoints={drawingPoints}
                     onFinishDrawing={handleFinishDrawing}
                     onCancelDrawing={handleCancelDrawing}
-                    canFinishDrawing={drawingPoints.length >= 1}
+                    canFinishDrawing={drawingPoints.length >= 3}
                     onUploadShapefile={() => setShowShapefileModal(true)}
                     onSoilTestLinked={handleSoilTestLinked}
                 />
@@ -799,7 +804,7 @@ function FieldVisualizationContent() {
                                 drawingPoints={drawingPoints}
                                 onFinishDrawing={handleFinishDrawing}
                                 onCancelDrawing={handleCancelDrawing}
-                                canFinishDrawing={drawingPoints.length >= 1}
+                                canFinishDrawing={drawingPoints.length >= 3}
                                 onUploadShapefile={() => {
                                     setShowShapefileModal(true);
                                     setIsMobileSidebarOpen(false);
