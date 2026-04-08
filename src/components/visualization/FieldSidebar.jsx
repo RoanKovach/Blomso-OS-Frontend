@@ -38,6 +38,8 @@ export default function FieldSidebar({
   onFinishDrawing,
   onCancelDrawing,
   canFinishDrawing,
+  drawInteraction = 'place',
+  onDrawInteractionChange,
   
   // Upload functionality
   onUploadShapefile,
@@ -81,13 +83,40 @@ export default function FieldSidebar({
         {mode === 'draw' && (
           <Card className="mb-2">
             <CardContent className="p-2.5">
+              {typeof onDrawInteractionChange === 'function' && (
+                <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-gray-200 bg-gray-50/80 p-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={drawInteraction === 'place' ? 'default' : 'ghost'}
+                    className="h-8 text-xs"
+                    onClick={() => onDrawInteractionChange('place')}
+                  >
+                    Place points
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={drawInteraction === 'pan' ? 'default' : 'ghost'}
+                    className="h-8 text-xs"
+                    onClick={() => onDrawInteractionChange('pan')}
+                  >
+                    Pan map
+                  </Button>
+                </div>
+              )}
               <div className="flex items-center gap-2 mb-2">
-                <Info className="w-4 h-4 text-blue-500" />
+                <Info className="w-4 h-4 text-blue-500 shrink-0" />
                 <span className="text-sm text-gray-600">
-                  {drawingPoints.length === 0 && "Click on map to start drawing"}
-                  {drawingPoints.length === 1 && "Add more points to define boundary"}
-                  {drawingPoints.length === 2 && "Add more points to define boundary"}
-                  {drawingPoints.length >= 3 && `${drawingPoints.length} points - click Finish when done`}
+                  {drawInteraction === 'pan' && (
+                    <>Drag the map to move. Choose <strong>Place points</strong> to add corners.</>
+                  )}
+                  {drawInteraction === 'place' && drawingPoints.length === 0 && (
+                    <>Click the map to place corners (drag-to-pan is off so clicks stay precise).</>
+                  )}
+                  {drawInteraction === 'place' && drawingPoints.length === 1 && "Add more points to define boundary"}
+                  {drawInteraction === 'place' && drawingPoints.length === 2 && "Add more points to define boundary"}
+                  {drawInteraction === 'place' && drawingPoints.length >= 3 && `${drawingPoints.length} points — click Finish when done`}
                 </span>
               </div>
               

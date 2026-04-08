@@ -116,6 +116,8 @@ function FieldVisualizationContent() {
     const [zoom, setZoom] = useState(7);
 
     const [mode, setMode] = useState("view");
+    /** While drawing: "place" = click adds vertices (pan disabled); "pan" = drag to move map */
+    const [drawInteraction, setDrawInteraction] = useState("place");
     const [drawingPoints, setDrawingPoints] = useState([]);
     const [selectedField, setSelectedField] = useState(null);
 
@@ -575,8 +577,8 @@ function FieldVisualizationContent() {
         if (!mapReady || !map?.loaded?.()) return;
 
         const onClick = (e) => {
-            // In draw mode, map clicks must add vertices — not select fields underneath.
-            if (mode === "draw" && !showCreationModal) {
+            // In draw mode, map clicks add vertices only in "place" — not select fields underneath.
+            if (mode === "draw" && !showCreationModal && drawInteraction === "place") {
                 handleMapClick({
                     lngLat: { lng: e.lngLat.lng, lat: e.lngLat.lat },
                 });
@@ -592,7 +594,8 @@ function FieldVisualizationContent() {
 
         const onMove = (e) => {
             if (mode === "draw" && !showCreationModal) {
-                map.getCanvas().style.cursor = "crosshair";
+                map.getCanvas().style.cursor =
+                    drawInteraction === "place" ? "crosshair" : "";
                 return;
             }
             const feats = map.queryRenderedFeatures(e.point, { layers: [FIELDS_FILL] });
@@ -606,11 +609,40 @@ function FieldVisualizationContent() {
             map.off("click", onClick);
             map.off("mousemove", onMove);
         };
-    }, [mapReady, mode, showCreationModal, fieldsList, handleFieldSelect, handleMapClick]);
+    }, [mapReady, mode, showCreationModal, drawInteraction, fieldsList, handleFieldSelect, handleMapClick]);
+
+    /** Draw mode: disable drag-pan while placing points so clicks don't become pans */
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!mapReady || !map?.loaded?.()) return;
+        const inDraw = mode === "draw" && !showCreationModal;
+        try {
+            if (inDraw && drawInteraction === "place") {
+                map.dragPan.disable();
+                map.doubleClickZoom.disable();
+            } else {
+                map.dragPan.enable();
+                map.doubleClickZoom.enable();
+            }
+        } catch {
+            /* handler may be missing in some builds */
+        }
+        return () => {
+            try {
+                map.dragPan.enable();
+                map.doubleClickZoom.enable();
+            } catch {
+                /* ignore */
+            }
+        };
+    }, [mapReady, mode, showCreationModal, drawInteraction]);
 
     const handleModeChange = (newMode) => {
         if (newMode === "view" && mode === "draw") {
             handleCancelDrawing();
+        }
+        if (newMode === "draw") {
+            setDrawInteraction("place");
         }
         setMode(newMode);
     };
@@ -623,6 +655,7 @@ function FieldVisualizationContent() {
     const handleCancelDrawing = () => {
         setDrawingPoints([]);
         setShowCreationModal(false);
+        setDrawInteraction("place");
         setMode("view");
         trackUserAction("drawing_cancelled", { point_count: drawingPoints.length });
     };
@@ -671,6 +704,7 @@ function FieldVisualizationContent() {
             toast.success(`Field "${newField.field_name}" created successfully!`);
             setShowCreationModal(false);
             setDrawingPoints([]);
+            setDrawInteraction("place");
             setMode("view");
             setSelectedField(newField);
         } catch (err) {
@@ -754,6 +788,8 @@ function FieldVisualizationContent() {
                     onFinishDrawing={handleFinishDrawing}
                     onCancelDrawing={handleCancelDrawing}
                     canFinishDrawing={drawingPoints.length >= 3}
+                    drawInteraction={drawInteraction}
+                    onDrawInteractionChange={setDrawInteraction}
                     onUploadShapefile={() => setShowShapefileModal(true)}
                     onSoilTestLinked={handleSoilTestLinked}
                 />
@@ -805,6 +841,8 @@ function FieldVisualizationContent() {
                                 onFinishDrawing={handleFinishDrawing}
                                 onCancelDrawing={handleCancelDrawing}
                                 canFinishDrawing={drawingPoints.length >= 3}
+                                drawInteraction={drawInteraction}
+                                onDrawInteractionChange={setDrawInteraction}
                                 onUploadShapefile={() => {
                                     setShowShapefileModal(true);
                                     setIsMobileSidebarOpen(false);
