@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -500,13 +500,15 @@ function FieldVisualizationContent() {
 
     const handleMapClick = useCallback(
         (event) => {
-            if (mode === "draw" && !showCreationModal) {
-                const { lng, lat } = event.lngLat;
-                setDrawingPoints((prev) => [...prev, { lng, lat }]);
-                trackUserAction("drawing_point_added", { point_count: drawingPoints.length + 1 });
-            }
+            if (mode !== "draw" || showCreationModal || drawInteraction !== "place") return;
+            const { lng, lat } = event.lngLat;
+            setDrawingPoints((prev) => {
+                const next = [...prev, { lng, lat }];
+                trackUserAction("drawing_point_added", { point_count: next.length });
+                return next;
+            });
         },
-        [mode, showCreationModal, drawingPoints.length, trackUserAction]
+        [mode, showCreationModal, drawInteraction, trackUserAction]
     );
 
     useEffect(() => {
@@ -572,18 +574,74 @@ function FieldVisualizationContent() {
         }
     }, [fieldsList, isLoading, selectedField, center, mapReady]);
 
+    /**
+     * While placing polygon vertices, turn off every MapLibre handler that moves the map.
+     * useLayoutEffect runs before paint so drag-pan is off before the next pointer event.
+     */
+    useLayoutEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapReady) return;
+
+        const placeVertices =
+            mode === "draw" && !showCreationModal && drawInteraction === "place";
+        const canvas = map.getCanvas?.();
+
+        const navigationHandlers = [
+            map.dragPan,
+            map.dragRotate,
+            map.touchZoomRotate,
+            map.touchPitch,
+            map.boxZoom,
+            map.doubleClickZoom,
+            map.keyboard,
+        ];
+
+        if (placeVertices) {
+            for (const h of navigationHandlers) {
+                try {
+                    h?.disable?.();
+                } catch {
+                    /* ignore */
+                }
+            }
+            if (canvas) {
+                canvas.style.touchAction = "none";
+                canvas.style.userSelect = "none";
+            }
+        } else {
+            for (const h of navigationHandlers) {
+                try {
+                    h?.enable?.();
+                } catch {
+                    /* ignore */
+                }
+            }
+            if (canvas) {
+                canvas.style.touchAction = "";
+                canvas.style.userSelect = "";
+            }
+        }
+    }, [mapReady, mode, showCreationModal, drawInteraction]);
+
     useEffect(() => {
         const map = mapRef.current;
         if (!mapReady || !map?.loaded?.()) return;
 
-        const onClick = (e) => {
-            // In draw mode, map clicks add vertices only in "place" — not select fields underneath.
-            if (mode === "draw" && !showCreationModal && drawInteraction === "place") {
-                handleMapClick({
-                    lngLat: { lng: e.lngLat.lng, lat: e.lngLat.lat },
-                });
-                return;
+        /** Left mousedown places a vertex before drag-pan can treat the gesture as a pan */
+        const onMouseDown = (e) => {
+            if (mode !== "draw" || showCreationModal || drawInteraction !== "place") return;
+            const ev = e.originalEvent;
+            if (ev && "button" in ev && ev.button !== 0) return;
+            try {
+                ev?.preventDefault?.();
+            } catch {
+                /* ignore */
             }
+            handleMapClick({ lngLat: e.lngLat });
+        };
+
+        const onClick = (e) => {
+            if (mode === "draw" && !showCreationModal) return;
             const fieldFeats = map.queryRenderedFeatures(e.point, { layers: [FIELDS_FILL] });
             if (fieldFeats.length) {
                 const id = fieldFeats[0].properties?.id;
@@ -602,40 +660,16 @@ function FieldVisualizationContent() {
             map.getCanvas().style.cursor = feats.length ? "pointer" : "";
         };
 
+        map.on("mousedown", onMouseDown);
         map.on("click", onClick);
         map.on("mousemove", onMove);
 
         return () => {
+            map.off("mousedown", onMouseDown);
             map.off("click", onClick);
             map.off("mousemove", onMove);
         };
     }, [mapReady, mode, showCreationModal, drawInteraction, fieldsList, handleFieldSelect, handleMapClick]);
-
-    /** Draw mode: disable drag-pan while placing points so clicks don't become pans */
-    useEffect(() => {
-        const map = mapRef.current;
-        if (!mapReady || !map?.loaded?.()) return;
-        const inDraw = mode === "draw" && !showCreationModal;
-        try {
-            if (inDraw && drawInteraction === "place") {
-                map.dragPan.disable();
-                map.doubleClickZoom.disable();
-            } else {
-                map.dragPan.enable();
-                map.doubleClickZoom.enable();
-            }
-        } catch {
-            /* handler may be missing in some builds */
-        }
-        return () => {
-            try {
-                map.dragPan.enable();
-                map.doubleClickZoom.enable();
-            } catch {
-                /* ignore */
-            }
-        };
-    }, [mapReady, mode, showCreationModal, drawInteraction]);
 
     const handleModeChange = (newMode) => {
         if (newMode === "view" && mode === "draw") {
