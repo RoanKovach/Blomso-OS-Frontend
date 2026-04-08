@@ -6,6 +6,7 @@ import { AlertCircle, ArrowLeft, Upload as UploadIcon, FileArchive } from "lucid
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { createFieldDeepLink } from "@/components/utils/createFieldDeepLink";
 import { User } from "@/api/entities";
 import { isUnauthenticatedError } from "@/api/auth";
 import { isApiConfigured, setAuthToken } from "@/api/client";
@@ -88,6 +89,25 @@ export default function UploadPage() {
             if (v !== undefined && v !== null) return v;
         }
         return undefined;
+    };
+
+    const buildNormalizedLinkageOptions = () => {
+        const ctx = contextualData || {};
+        const rec = currentRecord || {};
+        const linkedId = pickFirstDefined(ctx.linkedFieldId, rec.linkedFieldId, fieldIdFromUrl || undefined);
+        const linkedName = pickFirstDefined(ctx.linkedFieldName, rec.linkedFieldName);
+        const entered = pickFirstDefined(ctx.enteredFieldLabel, rec.enteredFieldLabel, ctx.field_name);
+        const fname = pickFirstDefined(ctx.field_name, rec.field_name, linkedName, entered);
+        return {
+            extractionArtifactKey: rec.extractionArtifactKey,
+            reviewedArtifactKey: rec.reviewedArtifactKey,
+            normalizedArtifactKey: rec.normalizedArtifactKey,
+            linkedFieldId: linkedId,
+            linkedFieldName: linkedName,
+            enteredFieldLabel: entered,
+            field_id: linkedId,
+            field_name: fname,
+        };
     };
 
     const normalizeExtractionArtifact = (raw) => {
@@ -558,18 +578,26 @@ export default function UploadPage() {
             setIsSaving(true);
             setSaveError(null);
             try {
-                const options = currentRecord?.extractionArtifactKey
-                    ? { extractionArtifactKey: currentRecord.extractionArtifactKey }
-                    : {};
-                const res = await saveNormalizedRecords(uploadId, finalizedTests, options);
+                const linkage = buildNormalizedLinkageOptions();
+                const res = await saveNormalizedRecords(uploadId, finalizedTests, linkage);
                 const count = res?.count ?? res?.saved?.length ?? finalizedTests.length;
-                toast.success(`Successfully saved ${count} record${count !== 1 ? 's' : ''}!`);
-                navigate(createPageUrl("MyRecords"), {
-                    state: {
-                        refreshData: true,
-                        successMessage: `Successfully saved ${count} record${count !== 1 ? 's' : ''}!`
-                    }
-                });
+                const successMessage = `Successfully saved ${count} record${count !== 1 ? "s" : ""}!`;
+                const fieldIdForReturn = pickFirstDefined(
+                    fieldIdFromUrl || undefined,
+                    finalizedTests[0]?.field_id,
+                    linkage.linkedFieldId,
+                    linkage.field_id
+                );
+                toast.success(successMessage);
+                if (fieldIdForReturn) {
+                    navigate(createFieldDeepLink(fieldIdForReturn), {
+                        state: { refreshFieldStory: true },
+                    });
+                } else {
+                    navigate(createPageUrl("MyRecords"), {
+                        state: { refreshData: true, successMessage },
+                    });
+                }
                 setBackendReviewUploadId(null);
                 setCurrentRecord(null);
             } catch (err) {
@@ -593,23 +621,29 @@ export default function UploadPage() {
             setIsSaving(true);
             setSaveError(null);
             try {
-                const options = currentRecord?.extractionArtifactKey
-                    ? {
-                        extractionArtifactKey: currentRecord.extractionArtifactKey,
-                        documentFamily: 'yield_scale_ticket',
-                    }
-                    : { documentFamily: 'yield_scale_ticket' };
-                const res = await saveNormalizedRecords(uploadId, yieldTickets, options);
-                const count = res?.count ?? res?.saved?.length ?? yieldTickets.length;
-                toast.success(
-                    `Successfully saved ${count} yield ticket${count !== 1 ? 's' : ''}!`
-                );
-                navigate(createPageUrl("MyRecords"), {
-                    state: {
-                        refreshData: true,
-                        successMessage: `Successfully saved ${count} yield ticket${count !== 1 ? 's' : ''}!`,
-                    },
+                const linkage = buildNormalizedLinkageOptions();
+                const res = await saveNormalizedRecords(uploadId, yieldTickets, {
+                    ...linkage,
+                    documentFamily: "yield_scale_ticket",
                 });
+                const count = res?.count ?? res?.saved?.length ?? yieldTickets.length;
+                const successMessage = `Successfully saved ${count} yield ticket${count !== 1 ? "s" : ""}!`;
+                const fieldIdForReturn = pickFirstDefined(
+                    fieldIdFromUrl || undefined,
+                    yieldTickets[0]?.field_id,
+                    linkage.linkedFieldId,
+                    linkage.field_id
+                );
+                toast.success(successMessage);
+                if (fieldIdForReturn) {
+                    navigate(createFieldDeepLink(fieldIdForReturn), {
+                        state: { refreshFieldStory: true },
+                    });
+                } else {
+                    navigate(createPageUrl("MyRecords"), {
+                        state: { refreshData: true, successMessage },
+                    });
+                }
                 setBackendReviewUploadId(null);
                 setCurrentRecord(null);
             } catch (err) {

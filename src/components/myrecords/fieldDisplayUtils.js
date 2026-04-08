@@ -23,7 +23,7 @@ export function getCanonicalFieldContextForSoilTest(test, fieldsMap, sourceUploa
     const upload = test.sourceUploadId ? sourceUploadMap.get(test.sourceUploadId) : null;
     const ctx = upload ? getContext(upload) : null;
 
-    const canonicalFieldId = test.field_id ?? upload?.linkedFieldId ?? null;
+    const canonicalFieldId = test.field_id ?? test.linkedFieldId ?? upload?.linkedFieldId ?? null;
     const catalogName = canonicalFieldId ? fieldsMap.get(canonicalFieldId) : null;
 
     const sourceFieldLabel =
@@ -65,7 +65,7 @@ export function getCanonicalFieldContextForYieldRecord(rec, fieldsMap, sourceUpl
     const upload = rec.sourceUploadId ? sourceUploadMap.get(rec.sourceUploadId) : null;
     const ctx = upload ? getContext(upload) : null;
 
-    const canonicalFieldId = rec.field_id ?? upload?.linkedFieldId ?? null;
+    const canonicalFieldId = rec.field_id ?? rec.linkedFieldId ?? upload?.linkedFieldId ?? null;
     const catalogName = canonicalFieldId ? fieldsMap.get(canonicalFieldId) : null;
 
     const sourceFieldLabel =

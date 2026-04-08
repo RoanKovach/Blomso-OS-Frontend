@@ -2,7 +2,9 @@
  * Backend records API (upload placeholders and normalized soil tests from DynamoDB).
  * GET /records returns { ok: true, records: [...] } (items may be type soil_upload or normalized_soil_test).
  * GET /records/{id} returns { ok: true, record } (owner check).
- * POST /records/normalized (F1) saves one normalized_soil_test per request; frontend loops for batch.
+ * POST /records/normalized saves one normalized record per request (soil_test or yield_scale_ticket); frontend loops for batch.
+ * Body may include field linkage and lineage: linkedFieldId, linkedFieldName, enteredFieldLabel, field_id, field_name,
+ * extractionArtifactKey, reviewedArtifactKey, normalizedArtifactKey.
  * Auth required.
  */
 
@@ -74,9 +76,45 @@ export async function triggerExtraction(id) {
  * Backend exposes POST /records/normalized (one record per request); we call it once per record.
  * @param {string} uploadId - Upload record id (sourceUploadId)
  * @param {Array<object>} records - Shaped records (soil or yield, depending on documentFamily)
- * @param {{ extractionArtifactKey?: string, documentFamily?: string }} [options]
+ * @param {{
+ *   extractionArtifactKey?: string,
+ *   reviewedArtifactKey?: string,
+ *   normalizedArtifactKey?: string,
+ *   linkedFieldId?: string|null,
+ *   linkedFieldName?: string|null,
+ *   enteredFieldLabel?: string|null,
+ *   field_id?: string|null,
+ *   field_name?: string|null,
+ *   documentFamily?: string
+ * }} [options]
  * @returns {Promise<{ ok: boolean, saved?: Array<{ id: string, ... }>, count?: number, error?: string }>}
  */
+function assignIfPresent(target, key, value) {
+  if (value === undefined || value === null || value === '') return;
+  target[key] = value;
+}
+
+function mergeFieldLinkage(body, record, options) {
+  const linkedFieldId = record.linkedFieldId ?? options.linkedFieldId;
+  const linkedFieldName = record.linkedFieldName ?? options.linkedFieldName;
+  const enteredFieldLabel = record.enteredFieldLabel ?? options.enteredFieldLabel;
+  const field_id = record.field_id ?? options.field_id ?? linkedFieldId;
+  const field_name = record.field_name ?? options.field_name ?? linkedFieldName;
+
+  assignIfPresent(body, 'linkedFieldId', linkedFieldId);
+  assignIfPresent(body, 'linkedFieldName', linkedFieldName);
+  assignIfPresent(body, 'enteredFieldLabel', enteredFieldLabel);
+  assignIfPresent(body, 'field_id', field_id);
+  assignIfPresent(body, 'field_name', field_name);
+
+  const reviewed =
+    record.reviewedArtifactKey ?? options.reviewedArtifactKey;
+  const normalizedKey =
+    record.normalizedArtifactKey ?? options.normalizedArtifactKey;
+  if (reviewed) body.reviewedArtifactKey = reviewed;
+  if (normalizedKey) body.normalizedArtifactKey = normalizedKey;
+}
+
 export async function saveNormalizedRecords(uploadId, records, options = {}) {
   if (!isApiConfigured()) {
     throw new Error('API not configured. Set VITE_API_URL to save records.');
@@ -130,6 +168,8 @@ export async function saveNormalizedRecords(uploadId, records, options = {}) {
         soil_type: r.soil_type ?? null,
       };
     }
+
+    mergeFieldLinkage(body, r, options);
 
     if (extractionArtifactKey) body.extractionArtifactKey = extractionArtifactKey;
 

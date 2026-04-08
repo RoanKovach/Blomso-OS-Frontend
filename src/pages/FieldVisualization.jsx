@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTracking } from "@/components/analytics/useTracking";
@@ -16,6 +16,7 @@ import { useFieldSearch } from "../components/hooks/useFieldSearch";
 import SSURGOLayer from "../components/visualization/SSURGOLayer";
 import SSURGOLegend from "../components/visualization/SSURGOLegend";
 import FieldWorkbenchPanel from "../components/visualization/FieldWorkbenchPanel";
+import { useFieldStory } from "../components/hooks/useFieldStory";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
@@ -98,6 +99,7 @@ function boundsFromPolygonGeometry(geometry) {
 
 function FieldVisualizationContent() {
     const location = useLocation();
+    const navigate = useNavigate();
 
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
@@ -139,8 +141,19 @@ function FieldVisualizationContent() {
     const [layerToggle, setLayerToggle] = useState({ ...PRODUCT_LAYER_DEFAULTS });
     /** Increments on every field select (including re-clicking the same field) so fitBounds always runs */
     const [fieldSelectionSeq, setFieldSelectionSeq] = useState(0);
-    /** Bumps FieldWorkbenchPanel evidence refresh when linking completes */
+    /** Bumps field story refetch when linking completes */
     const [evidenceRefreshKey, setEvidenceRefreshKey] = useState(0);
+    /** After upload save: navigation state asks for a one-time story reload */
+    const [storyRefreshNonce, setStoryRefreshNonce] = useState(0);
+
+    const storyRefetchSignal = `${evidenceRefreshKey}:${storyRefreshNonce}`;
+    const fieldStory = useFieldStory(selectedField?.id, storyRefetchSignal);
+
+    useEffect(() => {
+        if (!location.state?.refreshFieldStory) return;
+        setStoryRefreshNonce((n) => n + 1);
+        navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: {} });
+    }, [location.state?.refreshFieldStory, location.pathname, location.search, navigate]);
 
     useEffect(() => {
         let cancelled = false;
@@ -743,7 +756,19 @@ function FieldVisualizationContent() {
 
             <div className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col md:ml-72 lg:ml-80">
                 {selectedField && mode === "view" && selectedFieldMerged && (
-                    <FieldWorkbenchPanel field={selectedFieldMerged} evidenceKey={evidenceRefreshKey} />
+                    <FieldWorkbenchPanel
+                        field={selectedFieldMerged}
+                        story={{
+                            loading: fieldStory.loading,
+                            error: fieldStory.error,
+                            refetch: fieldStory.refetch,
+                            summary: fieldStory.summary,
+                            latest: fieldStory.latest,
+                            timeline: fieldStory.timeline,
+                            events: fieldStory.events,
+                            counts: fieldStory.counts,
+                        }}
+                    />
                 )}
 
                 <div className="relative flex min-h-0 flex-1 flex-col">

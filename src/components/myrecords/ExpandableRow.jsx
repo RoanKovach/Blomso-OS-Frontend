@@ -4,6 +4,31 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, MapPin, Calendar, Sprout } from "lucide-react";
 import { formatDateOnlySafe } from "./dateUtils";
 
+function LineageReadOnly({ test }) {
+    const pairs = [
+        ["Linked field ID", test?.linkedFieldId],
+        ["Linked field name", test?.linkedFieldName],
+        ["Entered field label", test?.enteredFieldLabel],
+        ["Extraction artifact", test?.extractionArtifactKey],
+        ["Reviewed artifact", test?.reviewedArtifactKey],
+        ["Normalized artifact", test?.normalizedArtifactKey],
+    ].filter(([, v]) => v != null && v !== "");
+    if (pairs.length === 0) return null;
+    return (
+        <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4">
+            <h4 className="mb-3 font-semibold text-slate-900">Lineage</h4>
+            <dl className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {pairs.map(([label, value]) => (
+                    <div key={label} className="rounded-md border bg-white p-3">
+                        <dt className="text-xs font-medium text-gray-500">{label}</dt>
+                        <dd className="mt-1 break-all font-mono text-xs text-gray-900">{String(value)}</dd>
+                    </div>
+                ))}
+            </dl>
+        </div>
+    );
+}
+
 export default function ExpandableRow({ test, displayFieldName, displayCrop, displayAcres }) {
     const soilData = test.soil_data || {};
     
@@ -112,6 +137,8 @@ export default function ExpandableRow({ test, displayFieldName, displayCrop, dis
                     })}
                 </div>
             </div>
+
+            <LineageReadOnly test={test} />
 
             {/* AI Summary */}
             {test.summary && (

@@ -70,6 +70,15 @@ function YieldExpandableRow({ rec, fieldContext, onOpenMap }) {
         { label: "Price / bu", value: price != null && price !== "" ? String(price) : "—" },
     ];
 
+    const lineageRows = [
+        ["Linked field ID", rec?.linkedFieldId],
+        ["Linked field name", rec?.linkedFieldName],
+        ["Entered field label", rec?.enteredFieldLabel],
+        ["Extraction artifact", rec?.extractionArtifactKey],
+        ["Reviewed artifact", rec?.reviewedArtifactKey],
+        ["Normalized artifact", rec?.normalizedArtifactKey],
+    ].filter(([, v]) => v != null && v !== "");
+
     return (
         <div className="space-y-4 p-4">
             <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -78,7 +87,7 @@ function YieldExpandableRow({ rec, fieldContext, onOpenMap }) {
                     {fieldContext?.canonicalFieldId && (
                         <Button type="button" variant="outline" size="sm" className="h-8" onClick={onOpenMap}>
                             <MapPin className="mr-1 h-4 w-4" />
-                            Open field
+                            Open Field Story
                         </Button>
                     )}
                 </div>
@@ -92,6 +101,19 @@ function YieldExpandableRow({ rec, fieldContext, onOpenMap }) {
                         </div>
                     ))}
                 </dl>
+                {lineageRows.length > 0 && (
+                    <div className="mt-4 rounded-md border border-slate-200 bg-slate-50/80 p-3">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Lineage</div>
+                        <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {lineageRows.map(([label, value]) => (
+                                <div key={label} className="rounded border bg-white p-2">
+                                    <dt className="text-[10px] font-medium text-gray-500">{label}</dt>
+                                    <dd className="mt-0.5 break-all font-mono text-[10px] text-gray-900">{String(value)}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </div>
+                )}
                 <p className="mt-3 text-xs text-slate-500">
                     Field reassignment for saved yield tickets isn’t available yet in v1 (requires backend support).
                 </p>
@@ -100,7 +122,7 @@ function YieldExpandableRow({ rec, fieldContext, onOpenMap }) {
     );
 }
 
-function SoilFieldLinkControl({ test, canonicalFields = [], onPatched }) {
+function SoilFieldLinkControl({ test, canonicalFields = [], onPatched, onOpenFieldStory }) {
     const currentFieldId = test?.field_id ?? null;
     const [value, setValue] = useState(currentFieldId || "none");
     const [saving, setSaving] = useState(false);
@@ -121,6 +143,14 @@ function SoilFieldLinkControl({ test, canonicalFields = [], onPatched }) {
                 <p className="mt-2 text-xs text-slate-500">
                     Create fields first to reassign this record.
                 </p>
+                {typeof onOpenFieldStory === "function" && (
+                    <div className="mt-3">
+                        <Button type="button" variant="outline" size="sm" className="h-8" onClick={onOpenFieldStory}>
+                            <MapPin className="mr-1 h-4 w-4" />
+                            Open Field Story
+                        </Button>
+                    </div>
+                )}
             </div>
         );
     }
@@ -185,6 +215,14 @@ function SoilFieldLinkControl({ test, canonicalFields = [], onPatched }) {
             <p className="mt-2 text-xs text-slate-500">
                 This updates the field link for this saved soil test record.
             </p>
+            {typeof onOpenFieldStory === "function" && (
+                <div className="mt-3">
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={onOpenFieldStory}>
+                        <MapPin className="mr-1 h-4 w-4" />
+                        Open Field Story
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }
@@ -326,6 +364,12 @@ export default function SoilTestsTab() {
                     crop_type: r.crop_type,
                     soil_type: r.soil_type,
                     field_id: r.field_id,
+                    linkedFieldId: r.linkedFieldId ?? null,
+                    linkedFieldName: r.linkedFieldName ?? null,
+                    enteredFieldLabel: r.enteredFieldLabel ?? null,
+                    extractionArtifactKey: r.extractionArtifactKey ?? null,
+                    reviewedArtifactKey: r.reviewedArtifactKey ?? null,
+                    normalizedArtifactKey: r.normalizedArtifactKey ?? null,
                     soil_health_index: r.soil_health_index,
                     updated_date: r.updatedAt ?? r.createdAt,
                     createdAt: r.createdAt,
@@ -1404,11 +1448,16 @@ export default function SoilTestsTab() {
                                                                             <TooltipProvider>
                                                                                 <Tooltip>
                                                                                     <TooltipTrigger asChild>
-                                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-gray-500 hover:text-blue-600" onClick={(e) => { e.stopPropagation(); navigate(createFieldDeepLink(canonicalFieldId)); }}>
+                                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-gray-500 hover:text-blue-600" onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            navigate(createFieldDeepLink(canonicalFieldId), {
+                                                                                                state: { refreshFieldStory: true },
+                                                                                            });
+                                                                                        }}>
                                                                                             <MapPin className="h-4 w-4" />
                                                                                         </Button>
                                                                                     </TooltipTrigger>
-                                                                                    <TooltipContent><p>View on Map</p></TooltipContent>
+                                                                                    <TooltipContent><p>Open Field Story</p></TooltipContent>
                                                                                 </Tooltip>
                                                                             </TooltipProvider>
                                                                         )}
@@ -1437,6 +1486,15 @@ export default function SoilTestsTab() {
                                                                                         )
                                                                                     );
                                                                                 }}
+                                                                                onOpenFieldStory={
+                                                                                    canonicalFieldId
+                                                                                        ? () =>
+                                                                                              navigate(
+                                                                                                  createFieldDeepLink(canonicalFieldId),
+                                                                                                  { state: { refreshFieldStory: true } }
+                                                                                              )
+                                                                                        : undefined
+                                                                                }
                                                                             />
                                                                             <div className="rounded-lg border border-slate-200 bg-white">
                                                                                 <ExpandableRow
@@ -1541,12 +1599,16 @@ export default function SoilTestsTab() {
                                                                                             variant="ghost"
                                                                                             size="icon"
                                                                                             className="h-7 w-7 shrink-0 text-gray-500 hover:text-blue-600"
-                                                                                            onClick={() => navigate(createFieldDeepLink(fc.canonicalFieldId))}
+                                                                                            onClick={() =>
+                                                                                                    navigate(createFieldDeepLink(fc.canonicalFieldId), {
+                                                                                                        state: { refreshFieldStory: true },
+                                                                                                    })
+                                                                                                }
                                                                                         >
                                                                                             <MapPin className="h-4 w-4" />
                                                                                         </Button>
                                                                                     </TooltipTrigger>
-                                                                                    <TooltipContent><p>Open field</p></TooltipContent>
+                                                                                    <TooltipContent><p>Open Field Story</p></TooltipContent>
                                                                                 </Tooltip>
                                                                             </TooltipProvider>
                                                                         )}
@@ -1567,7 +1629,10 @@ export default function SoilTestsTab() {
                                                                             fieldContext={fc}
                                                                             onOpenMap={
                                                                                 fc?.canonicalFieldId
-                                                                                    ? () => navigate(createFieldDeepLink(fc.canonicalFieldId))
+                                                                                    ? () =>
+                                                                                        navigate(createFieldDeepLink(fc.canonicalFieldId), {
+                                                                                            state: { refreshFieldStory: true },
+                                                                                        })
                                                                                     : undefined
                                                                             }
                                                                         />
@@ -1649,14 +1714,16 @@ export default function SoilTestsTab() {
                                                                                     className="h-7 w-7 shrink-0 text-gray-500 hover:text-blue-600"
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
-                                                                                        navigate(createFieldDeepLink(canonicalFieldId));
+                                                                                        navigate(createFieldDeepLink(canonicalFieldId), {
+                                                                                        state: { refreshFieldStory: true },
+                                                                                    });
                                                                                     }}
                                                                                 >
                                                                                     <MapPin className="h-4 w-4" />
                                                                                 </Button>
                                                                             </TooltipTrigger>
                                                                             <TooltipContent>
-                                                                                <p>View on Map</p>
+                                                                                <p>Open Field Story</p>
                                                                             </TooltipContent>
                                                                         </Tooltip>
                                                                     </TooltipProvider>
@@ -1733,9 +1800,18 @@ export default function SoilTestsTab() {
                                             {/* Action buttons */}
                                             <div className="flex flex-wrap gap-2 pt-2 border-t">
                                                 {canonicalFieldId && (
-                                                    <Button variant="outline" size="sm" onClick={() => navigate(createFieldDeepLink(canonicalFieldId))} className="flex-1 min-w-0">
-                                                        <MapPin className="w-3 h-3 mr-1" /> 
-                                                        <span className="truncate">Map</span>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="min-w-0 flex-1"
+                                                        onClick={() =>
+                                                            navigate(createFieldDeepLink(canonicalFieldId), {
+                                                                state: { refreshFieldStory: true },
+                                                            })
+                                                        }
+                                                    >
+                                                        <MapPin className="mr-1 h-3 w-3" />
+                                                        <span className="truncate">Field Story</span>
                                                     </Button>
                                                 )}
                                                 <Button variant="outline" size="sm" onClick={() => setTestToEdit(test)} className="flex-1 min-w-0">
@@ -1777,7 +1853,10 @@ export default function SoilTestsTab() {
                 yieldRecords={fieldSummary?.yieldRecords ?? []}
                 onOpenMap={
                     fieldSummary?.fieldId
-                        ? () => navigate(createFieldDeepLink(fieldSummary.fieldId))
+                        ? () =>
+                            navigate(createFieldDeepLink(fieldSummary.fieldId), {
+                                state: { refreshFieldStory: true },
+                            })
                         : undefined
                 }
                 formatLastUpdated={formatLastUpdated}
