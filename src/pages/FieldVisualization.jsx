@@ -76,6 +76,19 @@ function suppressCartoonBasemap(map, hiddenIdsRef) {
     }
 }
 
+/**
+ * Same coordinate space as MapLibre's DOM.mousePos / DOM.getPoint (see maplibre DOM class).
+ * Without scale + clientLeft/clientTop, unproject() is wrong and markers/lines won't match the map.
+ */
+function pointerPointInMapContainer(containerEl, clientX, clientY) {
+    const rect = containerEl.getBoundingClientRect();
+    const scaleX = rect.width / containerEl.offsetWidth || 1;
+    const scaleY = rect.height / containerEl.offsetHeight || 1;
+    const x = (clientX - rect.left) / scaleX - containerEl.clientLeft;
+    const y = (clientY - rect.top) / scaleY - containerEl.clientTop;
+    return [x, y];
+}
+
 function boundsFromPolygonGeometry(geometry) {
     if (!geometry || geometry.type !== "Polygon") return null;
     const ring = geometry.coordinates[0];
@@ -104,6 +117,12 @@ function FieldVisualizationContent() {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
     const drawingMarkersRef = useRef([]);
+    /** Latest draw UI state for canvas pointer listener (avoids stale closures). */
+    const fieldDrawRef = useRef({
+        mode: "view",
+        showCreationModal: false,
+        drawInteraction: "place",
+    });
     const basemapHiddenLayerIdsRef = useRef([]);
 
     const [mapConfig, setMapConfig] = useState(null);
@@ -507,6 +526,10 @@ function FieldVisualizationContent() {
         [trackUserAction]
     );
 
+    useLayoutEffect(() => {
+        fieldDrawRef.current = { mode, showCreationModal, drawInteraction };
+    }, [mode, showCreationModal, drawInteraction]);
+
     useEffect(() => {
         if (hasProcessedDeepLink) return;
 
@@ -571,8 +594,8 @@ function FieldVisualizationContent() {
     }, [fieldsList, isLoading, selectedField, center, mapReady]);
 
     /**
-     * Place-vertices mode: only turn off drag-pan (and double-click zoom) so MapLibre still emits
-     * proper `click` events with correct `e.lngLat`. Disabling many handlers broke click / hit testing.
+     * While placing polygon vertices, turn off every MapLibre handler that moves the map.
+     * useLayoutEffect runs before paint so drag-pan is off before the next pointer event.
      */
     useLayoutEffect(() => {
         const map = mapRef.current;
@@ -582,16 +605,23 @@ function FieldVisualizationContent() {
             mode === "draw" && !showCreationModal && drawInteraction === "place";
         const canvas = map.getCanvas?.();
 
+        const navigationHandlers = [
+            map.dragPan,
+            map.dragRotate,
+            map.touchZoomRotate,
+            map.touchPitch,
+            map.boxZoom,
+            map.doubleClickZoom,
+            map.keyboard,
+        ];
+
         if (placeVertices) {
-            try {
-                map.dragPan.disable();
-            } catch {
-                /* ignore */
-            }
-            try {
-                map.doubleClickZoom.disable();
-            } catch {
-                /* ignore */
+            for (const h of navigationHandlers) {
+                try {
+                    h?.disable?.();
+                } catch {
+                    /* ignore */
+                }
             }
             if (canvas) {
                 canvas.style.touchAction = "none";
@@ -599,15 +629,12 @@ function FieldVisualizationContent() {
                 canvas.style.cursor = "crosshair";
             }
         } else {
-            try {
-                map.dragPan.enable();
-            } catch {
-                /* ignore */
-            }
-            try {
-                map.doubleClickZoom.enable();
-            } catch {
-                /* ignore */
+            for (const h of navigationHandlers) {
+                try {
+                    h?.enable?.();
+                } catch {
+                    /* ignore */
+                }
             }
             if (canvas) {
                 canvas.style.touchAction = "";
@@ -617,26 +644,65 @@ function FieldVisualizationContent() {
         }
     }, [mapReady, mode, showCreationModal, drawInteraction]);
 
+    /**
+     * Place vertices via native pointerdown (capture) + unproject.
+     * MapLibre's map "mousedown" / click pipeline does not reliably run after we disable drag handlers.
+     */
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!mapReady || !map?.loaded?.()) return;
+        const container = map.getCanvasContainer();
+        if (!container) return;
+
+        const onPointerDownCapture = (e) => {
+            const { mode: m, showCreationModal: modalOpen, drawInteraction: di } = fieldDrawRef.current;
+            if (m !== "draw" || modalOpen || di !== "place") return;
+            if (e.pointerType === "mouse" && e.button !== 0) return;
+
+            const [x, y] = pointerPointInMapContainer(container, e.clientX, e.clientY);
+            if (
+                x < 0 ||
+                y < 0 ||
+                x > container.offsetWidth ||
+                y > container.offsetHeight ||
+                !Number.isFinite(x) ||
+                !Number.isFinite(y)
+            ) {
+                return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            let lngLat;
+            try {
+                lngLat = map.unproject([x, y]);
+            } catch {
+                return;
+            }
+            const lng = lngLat.lng;
+            const lat = lngLat.lat;
+            if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+
+            setDrawingPoints((prev) => {
+                const next = [...prev, { lng, lat }];
+                trackUserAction("drawing_point_added", { point_count: next.length });
+                return next;
+            });
+        };
+
+        container.addEventListener("pointerdown", onPointerDownCapture, { capture: true });
+        return () => {
+            container.removeEventListener("pointerdown", onPointerDownCapture, { capture: true });
+        };
+    }, [mapReady, trackUserAction]);
+
     useEffect(() => {
         const map = mapRef.current;
         if (!mapReady || !map?.loaded?.()) return;
 
         const onClick = (e) => {
-            if (mode === "draw" && !showCreationModal) {
-                if (drawInteraction === "place") {
-                    const ll = e.lngLat;
-                    const lng = ll.lng;
-                    const lat = ll.lat;
-                    if (Number.isFinite(lng) && Number.isFinite(lat)) {
-                        setDrawingPoints((prev) => {
-                            const next = [...prev, { lng, lat }];
-                            trackUserAction("drawing_point_added", { point_count: next.length });
-                            return next;
-                        });
-                    }
-                }
-                return;
-            }
+            if (mode === "draw" && !showCreationModal) return;
             const fieldFeats = map.queryRenderedFeatures(e.point, { layers: [FIELDS_FILL] });
             if (fieldFeats.length) {
                 const id = fieldFeats[0].properties?.id;
@@ -662,7 +728,7 @@ function FieldVisualizationContent() {
             map.off("click", onClick);
             map.off("mousemove", onMove);
         };
-    }, [mapReady, mode, showCreationModal, drawInteraction, fieldsList, handleFieldSelect, trackUserAction]);
+    }, [mapReady, mode, showCreationModal, drawInteraction, fieldsList, handleFieldSelect]);
 
     const handleModeChange = (newMode) => {
         if (newMode === "view" && mode === "draw") {
