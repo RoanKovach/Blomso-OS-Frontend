@@ -104,12 +104,6 @@ function FieldVisualizationContent() {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
     const drawingMarkersRef = useRef([]);
-    /** Latest draw UI state for canvas pointer listener (avoids stale closures). */
-    const fieldDrawRef = useRef({
-        mode: "view",
-        showCreationModal: false,
-        drawInteraction: "place",
-    });
     const basemapHiddenLayerIdsRef = useRef([]);
 
     const [mapConfig, setMapConfig] = useState(null);
@@ -504,9 +498,18 @@ function FieldVisualizationContent() {
         [trackUserAction]
     );
 
-    useLayoutEffect(() => {
-        fieldDrawRef.current = { mode, showCreationModal, drawInteraction };
-    }, [mode, showCreationModal, drawInteraction]);
+    const handleMapClick = useCallback(
+        (event) => {
+            if (mode !== "draw" || showCreationModal || drawInteraction !== "place") return;
+            const { lng, lat } = event.lngLat;
+            setDrawingPoints((prev) => {
+                const next = [...prev, { lng, lat }];
+                trackUserAction("drawing_point_added", { point_count: next.length });
+                return next;
+            });
+        },
+        [mode, showCreationModal, drawInteraction, trackUserAction]
+    );
 
     useEffect(() => {
         if (hasProcessedDeepLink) return;
@@ -604,7 +607,6 @@ function FieldVisualizationContent() {
             if (canvas) {
                 canvas.style.touchAction = "none";
                 canvas.style.userSelect = "none";
-                canvas.style.cursor = "crosshair";
             }
         } else {
             for (const h of navigationHandlers) {
@@ -617,60 +619,26 @@ function FieldVisualizationContent() {
             if (canvas) {
                 canvas.style.touchAction = "";
                 canvas.style.userSelect = "";
-                canvas.style.cursor = "";
             }
         }
     }, [mapReady, mode, showCreationModal, drawInteraction]);
 
-    /**
-     * Place vertices via native pointerdown (capture) + unproject.
-     * MapLibre's map "mousedown" / click pipeline does not reliably run after we disable drag handlers.
-     */
     useEffect(() => {
         const map = mapRef.current;
         if (!mapReady || !map?.loaded?.()) return;
-        const canvas = map.getCanvas();
-        if (!canvas) return;
 
-        const onPointerDownCapture = (e) => {
-            const { mode: m, showCreationModal: modalOpen, drawInteraction: di } = fieldDrawRef.current;
-            if (m !== "draw" || modalOpen || di !== "place") return;
-            if (e.pointerType === "mouse" && e.button !== 0) return;
-
-            const wrap = map.getCanvasContainer();
-            const rect = wrap.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            let lngLat;
+        /** Left mousedown places a vertex before drag-pan can treat the gesture as a pan */
+        const onMouseDown = (e) => {
+            if (mode !== "draw" || showCreationModal || drawInteraction !== "place") return;
+            const ev = e.originalEvent;
+            if (ev && "button" in ev && ev.button !== 0) return;
             try {
-                lngLat = map.unproject([x, y]);
+                ev?.preventDefault?.();
             } catch {
-                return;
+                /* ignore */
             }
-            const lng = lngLat.lng;
-            const lat = lngLat.lat;
-
-            setDrawingPoints((prev) => {
-                const next = [...prev, { lng, lat }];
-                trackUserAction("drawing_point_added", { point_count: next.length });
-                return next;
-            });
+            handleMapClick({ lngLat: e.lngLat });
         };
-
-        canvas.addEventListener("pointerdown", onPointerDownCapture, { capture: true });
-        return () => {
-            canvas.removeEventListener("pointerdown", onPointerDownCapture, { capture: true });
-        };
-    }, [mapReady, trackUserAction]);
-
-    useEffect(() => {
-        const map = mapRef.current;
-        if (!mapReady || !map?.loaded?.()) return;
 
         const onClick = (e) => {
             if (mode === "draw" && !showCreationModal) return;
@@ -692,14 +660,16 @@ function FieldVisualizationContent() {
             map.getCanvas().style.cursor = feats.length ? "pointer" : "";
         };
 
+        map.on("mousedown", onMouseDown);
         map.on("click", onClick);
         map.on("mousemove", onMove);
 
         return () => {
+            map.off("mousedown", onMouseDown);
             map.off("click", onClick);
             map.off("mousemove", onMove);
         };
-    }, [mapReady, mode, showCreationModal, drawInteraction, fieldsList, handleFieldSelect]);
+    }, [mapReady, mode, showCreationModal, drawInteraction, fieldsList, handleFieldSelect, handleMapClick]);
 
     const handleModeChange = (newMode) => {
         if (newMode === "view" && mode === "draw") {
