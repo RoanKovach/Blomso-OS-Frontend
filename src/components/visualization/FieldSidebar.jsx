@@ -192,7 +192,7 @@ export default function FieldSidebar({
                     <CardContent className="p-2.5">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="font-medium text-gray-800 truncate">
-                          {field.field_name}
+                          {field.field_name ?? field.name ?? field.normalizedName ?? field.id}
                         </h3>
                         <Button
                           size="sm"

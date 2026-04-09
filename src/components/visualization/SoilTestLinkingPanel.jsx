@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Link2, Calendar, MapPin } from 'lucide-react';
-import { suggestSoilTestLinks } from '@/api/functions';
+import { suggestFieldLinks } from '@/api/fieldLinks';
 import { linkSoilTestsToField } from '@/api/functions';
 import { useToasts } from '@/components/hooks/useToasts';
 
@@ -33,22 +33,36 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
 
     setIsLoading(true);
     try {
-      const { data } = await suggestSoilTestLinks({ field_id: selectedField.id });
+      const res = await suggestFieldLinks(selectedField.id);
+      const data = res?.data ?? res;
 
-      if (data.success) {
-        const list = data.suggested_matches || [];
-        setSuggestions(list);
+      // Support both { success, suggested_matches } and direct array payloads.
+      const list =
+        (data && data.suggested_matches) ||
+        (Array.isArray(data) ? data : []) ||
+        [];
+
+      if (data?.success === false) {
+        throw new Error(data.error || 'Failed to fetch suggestions');
+      }
+
+      setSuggestions(list);
 
         const highConfidenceIds = list
           .filter((match) => (match.confidence_score ?? 0) >= CONFIDENCE_STRONG)
           .map((match) => match.soil_test_id);
         setSelectedTests(new Set(highConfidenceIds));
-      } else {
-        throw new Error(data.error || 'Failed to fetch suggestions');
-      }
     } catch (error) {
-      console.error('Error loading suggestions:', error);
-      toast.error(`Could not load suggestions: ${error.message}`);
+      // Wiped DB / no candidates can surface as 400 depending on backend implementation.
+      // Treat as "no suggestions" instead of a scary error.
+      const status = error?.status ?? error?.response?.status;
+      const isEmptyState =
+        status === 400 ||
+        status === 404;
+      if (!isEmptyState) {
+        console.error('Error loading suggestions:', error);
+        toast.error(`Could not load suggestions: ${error.message}`);
+      }
       setSuggestions([]);
     } finally {
       setIsLoading(false);
@@ -89,7 +103,9 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
 
       if (data.success && data.summary) {
         if (data.summary.successful > 0) {
-          toast.success(`Successfully linked ${data.summary.successful} test(s) to ${selectedField.field_name}.`);
+          const fieldName =
+            selectedField.field_name ?? selectedField.name ?? selectedField.normalizedName ?? 'field';
+          toast.success(`Successfully linked ${data.summary.successful} test(s) to ${fieldName}.`);
         }
         if (data.summary.already_linked > 0) {
           toast.info(`${data.summary.already_linked} test(s) were already linked.`);
