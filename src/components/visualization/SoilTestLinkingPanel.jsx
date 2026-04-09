@@ -3,8 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Link2, Calendar, MapPin } from 'lucide-react';
-import { suggestFieldLinks } from '@/api/fieldLinks';
-import { linkSoilTestsToField } from '@/api/functions';
+import { applyFieldLinks, suggestFieldLinks } from '@/api/fieldLinks';
 import { useToasts } from '@/components/hooks/useToasts';
 
 const CONFIDENCE_SHOW_MIN = 0.5;
@@ -96,10 +95,10 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
 
     setIsLinking(true);
     try {
-      const { data } = await linkSoilTestsToField({
-        field_id: selectedField.id,
-        soil_test_ids: Array.from(selectedTests)
+      const res = await applyFieldLinks(selectedField.id, {
+        soil_test_ids: Array.from(selectedTests),
       });
+      const data = res?.data ?? res;
 
       if (data.success && data.summary) {
         if (data.summary.successful > 0) {

@@ -3,8 +3,9 @@
  * Uses GET /documents/{id}/extraction (documents domain); behavior matches prior getExtraction consumers.
  */
 
-import { apiPost, isApiConfigured } from './client.js';
+import { isApiConfigured } from './client.js';
 import { getDocumentExtraction } from './documents.js';
+import { saveNormalizedRecords } from './records.js';
 
 /**
  * Fetch extraction artifact for an upload/document (artifact may have soil_tests or payload.soil_tests).
@@ -56,10 +57,9 @@ export async function saveNormalized(uploadId, shapedTests) {
   }
   if (isApiConfigured()) {
     try {
-      const res = await apiPost(`/records/${uploadId}/normalized`, { uploadId, soil_tests: shapedTests });
-      if (res && res.ok) {
-        return { ok: true, saved: res.saved ?? shapedTests.length };
-      }
+      // Canonical normalized save route is POST /records/normalized (one per record).
+      const res = await saveNormalizedRecords(uploadId, shapedTests, { documentFamily: 'soil_test' });
+      if (res && res.ok) return { ok: true, saved: res.count ?? shapedTests.length };
     } catch (_) {
       // Backend may expect per-test POST /records/normalized; caller should use saveNormalizedRecords
     }

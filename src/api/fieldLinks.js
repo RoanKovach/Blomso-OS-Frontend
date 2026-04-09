@@ -16,3 +16,20 @@ export async function suggestFieldLinks(fieldId) {
     return apiPost(`/fields/${encodeURIComponent(fieldId)}/suggest-links`, {});
 }
 
+/**
+ * Apply suggested links (or user-selected links) for a field.
+ * Canonical backend route: POST /fields/{id}/apply-links
+ *
+ * @param {string} fieldId
+ * @param {{ soil_test_ids: string[] }} body
+ */
+export async function applyFieldLinks(fieldId, body) {
+    if (!isApiConfigured()) {
+        throw new Error("API not configured. Set VITE_API_URL.");
+    }
+    if (!fieldId) {
+        throw new Error("fieldId is required");
+    }
+    return apiPost(`/fields/${encodeURIComponent(fieldId)}/apply-links`, body ?? {});
+}
+

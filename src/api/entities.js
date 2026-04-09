@@ -12,6 +12,7 @@ import {
   entityDelete,
   entityBulkCreate,
 } from './entityHelpers.js';
+import { apiPatch, isApiConfigured } from './client.js';
 import { User } from './auth.js';
 import { listRecords, getRecord as getRecordById, updateRecord, deleteRecord } from './records.js';
 
@@ -155,7 +156,10 @@ export const Field = {
     return entityCreate(fields, body);
   },
   update(id, body) {
-    return entityUpdate(fields, id, body);
+    // Canonical route for fields is PATCH /fields/{id}.
+    if (!isApiConfigured()) throw new Error('API not configured');
+    if (!id) throw new Error('id is required');
+    return apiPatch(`/fields/${id}`, body ?? {});
   },
   delete(id) {
     return entityDelete(fields, id);
