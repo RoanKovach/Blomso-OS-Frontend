@@ -18,8 +18,8 @@ function sanitizeReturnTo(value) {
 /**
  * OAuth callback for Cognito Hosted UI.
  *
- * Important: API Gateway JWT authorizer expects the Cognito *access token* as the Bearer token.
- * We still keep the id_token (when present) for potential UI identity needs.
+ * Stores the id_token as the API Bearer token.
+ * Also persists access_token separately when present.
  */
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -28,8 +28,8 @@ export default function AuthCallback() {
   useEffect(() => {
     const hash = window.location.hash?.slice(1) || '';
     const params = new URLSearchParams(hash);
-    const accessToken = params.get('access_token');
     const idToken = params.get('id_token');
+    const accessToken = params.get('access_token');
     const error = params.get('error');
     const rawReturn = new URLSearchParams(window.location.search).get('returnTo');
     const returnTo = sanitizeReturnTo(rawReturn) || AUTH_RETURN_DEFAULT;
@@ -40,15 +40,15 @@ export default function AuthCallback() {
       return () => clearTimeout(t);
     }
 
-    // Use access_token for API Authorization header.
+    // Optional: store access token separately (not used for API auth here).
     if (accessToken) {
-      setAuthToken(accessToken);
-      // Store id_token separately for optional UI usage (not used for API auth).
-      if (idToken) {
-        try {
-          localStorage.setItem('blomso_id_token', idToken);
-        } catch (_) {}
-      }
+      try {
+        localStorage.setItem('blomso_access_token', accessToken);
+      } catch (_) {}
+    }
+
+    if (idToken) {
+      setAuthToken(idToken);
       window.location.replace(window.location.origin + returnTo);
       return;
     }
