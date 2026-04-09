@@ -1,5 +1,5 @@
 /**
- * Auth API - User.me(), login(), logout(), updateMyUserData().
+ * Auth API - User.me(), login(), logout(), updateMyUserData() (PUT /me — not used by Account UI until backed).
  * Uses VITE_API_URL; when not set, me() throws so the app shows unauthenticated state.
  * Cognito Hosted UI: set VITE_APP_URL, VITE_COGNITO_DOMAIN, VITE_COGNITO_CLIENT_ID.
  */
