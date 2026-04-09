@@ -112,7 +112,7 @@ export default function FieldSidebar({
                     <>Drag the map to move. Choose <strong>Place points</strong> to add corners.</>
                   )}
                   {drawInteraction === 'place' && drawingPoints.length === 0 && (
-                    <>Tap or click the map to place each corner — map pan/rotate is turned off in this mode.</>
+                    <>Click the map to place corners (drag-to-pan is off so clicks stay precise).</>
                   )}
                   {drawInteraction === 'place' && drawingPoints.length === 1 && "Add more points to define boundary"}
                   {drawInteraction === 'place' && drawingPoints.length === 2 && "Add more points to define boundary"}
