@@ -42,9 +42,9 @@ export function getUploadCopy(documentFamily) {
 
 export function getStepLabels(documentFamily) {
   if (isYieldTicketDocument(documentFamily)) {
-    return ["Upload", "Field & evidence", "Processing", "Review"];
+    return ["Upload", "Field & evidence", "Processing", "Review data", "Context"];
   }
-  return ["Upload", "Field & evidence", "Processing", "Review"];
+  return ["Upload", "Field & evidence", "Processing", "Review data", "Context"];
 }
 
 export function getReviewTitle(documentFamily) {

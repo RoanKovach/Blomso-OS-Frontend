@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FileText, XCircle, Brain } from "lucide-react";
-import ReviewContextEnrichment from "./ReviewContextEnrichment";
 
 const EditableField = ({ id, label, value, onChange, type = "text", placeholder }) => (
     <div className="space-y-1">
@@ -31,9 +30,6 @@ export default function YieldTicketReview({
     isSaving = false,
     linkedFieldName = null,
     extractedFieldSummary = null,
-    registryField = null,
-    contextSnapshot = null,
-    documentNote = null,
 }) {
     const handleFieldChange = (ticket, fieldName, value, isNumeric = false) => {
         let parsedValue = value;
@@ -51,22 +47,16 @@ export default function YieldTicketReview({
 
     return (
         <div className="space-y-6">
-            <ReviewContextEnrichment
-                registryField={registryField}
-                contextSnapshot={contextSnapshot}
-                documentNote={documentNote}
-                linkedFieldName={linkedFieldName}
-            />
             <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div>
                             <CardTitle className="text-2xl font-bold text-green-900 mb-2 flex items-center gap-3">
                                 <FileText className="w-7 h-7" />
-                                Review &amp; enrich — yield ticket evidence
+                                Review yield ticket data
                             </CardTitle>
                             <p className="text-green-700">
-                                Confirm ticket values below. Context and field memory appear above; save-to-profile options follow in a later phase.
+                                Adjust extracted ticket values here. Optional field context is on the next step before save.
                             </p>
                             {(linkedFieldName || extractedFieldSummary) && (
                                 <div className="mt-3 space-y-1 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900">
@@ -280,7 +270,7 @@ export default function YieldTicketReview({
             <Card className="border-none shadow-lg bg-white/80 backdrop-blur-sm">
                 <CardFooter className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6">
                     <div className="text-sm text-green-700">
-                        <p className="font-semibold">Review and confirm yield ticket values before continuing.</p>
+                        <p className="font-semibold">Confirm ticket values, then continue to optional field context.</p>
                         <p>Weights, bushels, and price fields are optional but recommended for better summaries.</p>
                     </div>
                     <div className="flex gap-3">
@@ -300,7 +290,7 @@ export default function YieldTicketReview({
                             }`}
                         >
                             <Brain className="w-4 h-4" />
-                            {isSaving ? "Saving…" : "Continue"}
+                            {isSaving ? "Saving…" : "Continue to context"}
                         </Button>
                     </div>
                 </CardFooter>

@@ -10,8 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "react-hot-toast"; // Assuming react-hot-toast for toasts
 
 // Import validation utilities
-import { validateSoilTest, shapeSoilTestPayload, parse422Errors } from "../utils/soilTestValidation";
-import ReviewContextEnrichment from "./ReviewContextEnrichment";
+import { validateSoilTest, shapeSoilTestPayload } from "../utils/soilTestValidation";
 
 // Helper component for editable fields with validation
 const EditableField = ({ id, label, value, onChange, error, isBlank, type = "number", placeholder, required = false }) => (
@@ -41,9 +40,6 @@ export default function MultiTestReview({
     isSaving = false,
     linkedFieldName = null,
     extractedZoneFieldSummary = null,
-    registryField = null,
-    contextSnapshot = null,
-    documentNote = null,
 }) {
     const [validationErrors, setValidationErrors] = useState({});
     
@@ -144,22 +140,16 @@ export default function MultiTestReview({
 
     return (
         <div className="space-y-6">
-            <ReviewContextEnrichment
-                registryField={registryField}
-                contextSnapshot={contextSnapshot}
-                documentNote={documentNote}
-                linkedFieldName={linkedFieldName}
-            />
             <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div>
                             <CardTitle className="text-2xl font-bold text-green-900 mb-2 flex items-center gap-3">
                                 <FileText className="w-7 h-7" />
-                                Review &amp; enrich — soil test evidence
+                                Review soil test data
                             </CardTitle>
                             <p className="text-green-700">
-                                Confirm extracted values below. Use the context section above to see field memory; seasonal and profile updates will be wired to save in a later phase.
+                                Fix extraction and validation issues here. Field context and optional enrichment are on the next step.
                             </p>
                             {(linkedFieldName || extractedZoneFieldSummary) && (
                                 <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-900 space-y-1">
@@ -308,7 +298,7 @@ export default function MultiTestReview({
             <Card className="border-none shadow-lg bg-white/80 backdrop-blur-sm">
                 <CardFooter className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6">
                     <div className="text-sm text-green-700">
-                        <p className="font-semibold">✅ All records will be validated and saved to your account.</p>
+                        <p className="font-semibold">Validate extracted rows, then continue to optional field context.</p>
                         <p>Required fields: Zone name and Test date. Other fields are optional.</p>
                         {hasValidationErrors && (
                             <p className="text-amber-700 font-medium mt-1">
@@ -333,10 +323,16 @@ export default function MultiTestReview({
                                     ? 'bg-gray-400 cursor-not-allowed'
                                     : 'bg-green-600 hover:bg-green-700'
                             }`}
-                            title={hasValidationErrors ? "Please fix validation errors first" : isSaving ? "Saving…" : "Save all records"}
+                            title={
+                                hasValidationErrors
+                                    ? "Please fix validation errors first"
+                                    : isSaving
+                                      ? "Saving…"
+                                      : "Continue to optional context step"
+                            }
                         >
                             <Brain className="w-4 h-4" />
-                            {isSaving ? "Saving…" : "Save All Records"}
+                            {isSaving ? "Saving…" : "Continue to context"}
                         </Button>
                     </div>
                 </CardFooter>

@@ -1,10 +1,13 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Database, FileDown, Sprout, Loader2, AlertCircle } from "lucide-react";
-import FieldStoryBlocks, { FieldStoryCountsBadges } from "./FieldStoryBlocks";
+import { Upload, Database, FileDown, Sprout, Loader2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import FieldStoryBlocks from "./FieldStoryBlocks";
+import ConfirmationModal from "../myrecords/ConfirmationModal";
+import { deleteRecord } from "@/api/records";
+import { useToasts } from "@/components/hooks/useToasts";
 
 function formatLatestSoil(latest) {
     if (!latest || typeof latest !== "object") return null;
@@ -26,11 +29,27 @@ function formatLatestYield(latest) {
     return `${dateStr || "Saved"} · ${y.ticket_number ?? y.ticketNumber ?? "Yield"}`;
 }
 
+function deleteModalDescription(kind, label) {
+    const name = label ? `"${label}"` : "this item";
+    if (kind === "document") {
+        return `Remove upload ${name} from your records? This cannot be undone if the server supports delete for this id.`;
+    }
+    if (kind === "yield") {
+        return `Permanently delete yield ticket ${name}? This cannot be undone.`;
+    }
+    return `Permanently delete soil test ${name}? This cannot be undone.`;
+}
+
 /**
- * Field workbench header + Field Story blocks (timeline-backed when story props are provided).
+ * Compact field header, action row, condensed evidence strip, and collapsible timeline detail (with delete actions).
  */
 export default function FieldWorkbenchPanel({ field, story }) {
     if (!field) return null;
+
+    const { toast } = useToasts();
+    const [evidenceOpen, setEvidenceOpen] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState(null);
+    const [deleteWorking, setDeleteWorking] = useState(false);
 
     const name = field.field_name ?? field.name ?? "Field";
     const acres = field.acres ?? field.field_size_acres;
@@ -44,15 +63,43 @@ export default function FieldWorkbenchPanel({ field, story }) {
     const latest = story?.latest ?? {};
     const timeline = story?.timeline;
     const events = story?.events ?? [];
-    const counts = story?.counts ?? {};
 
-    const soilLine = loading ? "…" : formatLatestSoil(latest) || "None yet";
-    const yieldLine = loading ? "…" : formatLatestYield(latest) || "None yet";
+    const soilLine = loading ? "…" : formatLatestSoil(latest) || "—";
+    const yieldLine = loading ? "…" : formatLatestYield(latest) || "—";
+
+    const docN = timeline?.documents?.length ?? 0;
+    const soilN = timeline?.soil_tests?.length ?? 0;
+    const yieldN = timeline?.yield_tickets?.length ?? 0;
+
+    const openDelete = useCallback((kind, id, label) => {
+        if (!id) return;
+        setPendingDelete({ kind, id, label: label || id });
+    }, []);
+
+    const handleConfirmDelete = useCallback(async () => {
+        if (!pendingDelete?.id) return;
+        setDeleteWorking(true);
+        try {
+            const res = await deleteRecord(pendingDelete.id);
+            if (!res.ok) {
+                throw new Error(res.error || "Delete failed");
+            }
+            toast.success("Removed.");
+            if (typeof story?.refetch === "function") {
+                await story.refetch();
+            }
+        } catch {
+            toast.error("Could not remove this item. It may not be deletable from here yet.");
+        } finally {
+            setDeleteWorking(false);
+            setPendingDelete(null);
+        }
+    }, [pendingDelete, story, toast]);
 
     return (
         <div className="shrink-0 border-b border-slate-200/80 bg-white">
             <div className="px-3 py-2 md:px-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                     <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                             <h2 className="truncate text-base font-semibold tracking-tight text-slate-900">{name}</h2>
@@ -71,14 +118,6 @@ export default function FieldWorkbenchPanel({ field, story }) {
                                 <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" aria-label="Loading field story" />
                             )}
                         </div>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                            Latest evidence — soil: {soilLine} · yield: {yieldLine}
-                        </p>
-                        {timeline && (
-                            <div className="mt-2">
-                                <FieldStoryCountsBadges counts={counts} />
-                            </div>
-                        )}
                     </div>
                     <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
                         <Button asChild size="sm" className="h-8 bg-emerald-700 px-3 text-xs hover:bg-emerald-800">
@@ -107,23 +146,95 @@ export default function FieldWorkbenchPanel({ field, story }) {
                         </Link>
                     </div>
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50/90 px-2.5 py-2">
+                    <p className="text-[11px] leading-snug text-slate-600">
+                        <span className="font-semibold text-slate-800">Evidence</span>
+                        {" · "}
+                        {loading ? (
+                            "Loading counts…"
+                        ) : (
+                            <>
+                                {docN} doc{docN !== 1 ? "s" : ""} · {soilN} soil · {yieldN} yield
+                                {!err && (
+                                    <>
+                                        {" · "}
+                                        <span className="text-slate-500">Latest soil: {soilLine}</span>
+                                        {" · "}
+                                        <span className="text-slate-500">yield: {yieldLine}</span>
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </p>
+                    {timeline && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 text-xs text-slate-700"
+                            onClick={() => setEvidenceOpen((o) => !o)}
+                            aria-expanded={evidenceOpen}
+                        >
+                            {evidenceOpen ? (
+                                <>
+                                    Hide detail <ChevronUp className="h-3.5 w-3.5" />
+                                </>
+                            ) : (
+                                <>
+                                    Show detail <ChevronDown className="h-3.5 w-3.5" />
+                                </>
+                            )}
+                        </Button>
+                    )}
+                </div>
+
                 {err && (
                     <div className="mt-2 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
                         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                         <span className="min-w-0 flex-1">Could not load field story: {err}</span>
                         {typeof story?.refetch === "function" && (
-                            <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 text-[10px]" onClick={() => story.refetch()}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 shrink-0 text-[10px]"
+                                onClick={() => story.refetch()}
+                            >
                                 Retry
                             </Button>
                         )}
                     </div>
                 )}
             </div>
-            {timeline && (
-                <div className="max-h-[min(50vh,440px)] overflow-y-auto border-t border-slate-100 bg-slate-50/40 px-3 py-2 md:px-4">
-                    <FieldStoryBlocks summary={summary} timeline={timeline} events={events} />
+
+            {evidenceOpen && timeline && (
+                <div className="max-h-[min(45vh,400px)] overflow-y-auto border-t border-slate-100 bg-slate-50/50 px-3 py-2 md:px-4">
+                    <FieldStoryBlocks
+                        summary={summary}
+                        timeline={timeline}
+                        events={events}
+                        onRequestDelete={openDelete}
+                        deleteBusyId={deleteWorking ? pendingDelete?.id : null}
+                    />
                 </div>
             )}
+
+            <ConfirmationModal
+                isOpen={!!pendingDelete}
+                onClose={() => {
+                    if (!deleteWorking) setPendingDelete(null);
+                }}
+                onConfirm={handleConfirmDelete}
+                title="Remove this item?"
+                description={
+                    pendingDelete
+                        ? deleteModalDescription(pendingDelete.kind, pendingDelete.label)
+                        : undefined
+                }
+                confirmLabel="Delete"
+                isSubmitting={deleteWorking}
+            />
         </div>
     );
 }

@@ -17,9 +17,16 @@ export default function ConfirmationModal({
   onConfirm,
   title = "Are you sure?",
   description = "This action cannot be undone.",
+  confirmLabel = "Confirm",
+  isSubmitting = false,
 }) {
   return (
-    <AlertDialog open={isOpen} onOpenChange={onClose}>
+    <AlertDialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose?.();
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
@@ -31,9 +38,16 @@ export default function ConfirmationModal({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} className="bg-red-600 hover:bg-red-700">
-            Confirm
+          <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={isSubmitting}
+            onClick={(e) => {
+              e.preventDefault();
+              onConfirm?.();
+            }}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {isSubmitting ? "Working…" : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

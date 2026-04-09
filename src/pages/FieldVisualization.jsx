@@ -815,7 +815,7 @@ function FieldVisualizationContent() {
                     />
                 )}
 
-                <div className="relative flex min-h-0 flex-1 flex-col">
+                <div className="relative flex min-h-0 min-h-[min(45vh,300px)] flex-1 flex-col md:min-h-0">
                 <div className="md:hidden absolute top-4 left-4 z-[1000]">
                     <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
                         <SheetTrigger asChild>
@@ -864,7 +864,7 @@ function FieldVisualizationContent() {
 
                 <div
                     ref={mapContainerRef}
-                    className="z-0 min-h-0 w-full flex-1 bg-slate-950"
+                    className="z-0 min-h-0 w-full flex-1 bg-slate-950 md:min-h-[min(50vh,420px)]"
                     style={{ width: "100%", minHeight: "min(100vh, 100%)" }}
                 />
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ import FileUploadZone from "../components/upload/FileUploadZone";
 import ContextualForm from "../components/upload/ContextualForm";
 import MultiTestReview from "../components/upload/MultiTestReview";
 import YieldTicketReview from "../components/upload/YieldTicketReview";
+import ReviewContextEnrichment from "../components/upload/ReviewContextEnrichment";
 import BatchUploadModal from "../components/upload/BatchUploadModal";
 import AsyncUploadFlow from "../components/upload/AsyncUploadFlow";
 import { useUploadAndParse, normalizeSoilDataKeys } from "../components/hooks/useUploadAndParse";
@@ -94,6 +95,8 @@ export default function UploadPage() {
     const [reviewFamily, setReviewFamily] = useState(DOCUMENT_FAMILY_SOIL_TEST);
     /** Structured yield tickets for review when reviewFamily is yield. */
     const [yieldTickets, setYieldTickets] = useState([]);
+    /** Shaped soil rows ready for save after step 4 → 5 (API payload shape). */
+    const soilTestsForSaveRef = useRef(null);
 
     const reviewLinkedFieldId = useMemo(() => {
         if (currentRecord?.linkedFieldId) return currentRecord.linkedFieldId;
@@ -629,6 +632,7 @@ export default function UploadPage() {
                     linkage.field_id
                 );
                 toast.success(successMessage);
+                soilTestsForSaveRef.current = null;
                 if (fieldIdForReturn) {
                     navigate(createFieldDeepLink(fieldIdForReturn), {
                         state: { refreshFieldStory: true },
@@ -675,6 +679,7 @@ export default function UploadPage() {
                     linkage.field_id
                 );
                 toast.success(successMessage);
+                soilTestsForSaveRef.current = null;
                 if (fieldIdForReturn) {
                     navigate(createFieldDeepLink(fieldIdForReturn), {
                         state: { refreshFieldStory: true },
@@ -701,6 +706,7 @@ export default function UploadPage() {
 
         // Demo or missing uploadId: navigate with in-memory state (no backend save)
         setTimeout(() => {
+            soilTestsForSaveRef.current = null;
             if (isAnonymousUser) {
                 navigate(createPageUrl("MyRecords"), {
                     state: {
@@ -720,7 +726,36 @@ export default function UploadPage() {
         }, 1500);
     };
 
+    const handleContinueSoilReviewToContext = (shapedTests) => {
+        soilTestsForSaveRef.current = Array.isArray(shapedTests) ? shapedTests : [];
+        setCurrentStep(5);
+    };
+
+    const handleContinueYieldReviewToContext = () => {
+        setCurrentStep(5);
+    };
+
+    const handleEnrichmentStepSave = () => {
+        if (isSoilDocument(reviewFamily)) {
+            const shaped = soilTestsForSaveRef.current;
+            if (!Array.isArray(shaped) || shaped.length === 0) {
+                toast.error("No reviewed soil data to save. Go back to review.");
+                return;
+            }
+            void handleFinalizeAndAnalyze(shaped);
+            return;
+        }
+        if (isYieldTicketDocument(reviewFamily)) {
+            if (!yieldTickets.length) {
+                toast.error("No yield tickets to save.");
+                return;
+            }
+            void handleFinalizeAndAnalyze(yieldTickets);
+        }
+    };
+
     const resetUpload = () => {
+        soilTestsForSaveRef.current = null;
         setFile(null);
         setContextualData(null);
         setError(null);
@@ -802,6 +837,11 @@ export default function UploadPage() {
                         variant="outline"
                         size="icon"
                         onClick={() => {
+                            if (currentStep === 5 && !isProcessing) {
+                                setCurrentStep(4);
+                                setError(null);
+                                return;
+                            }
                             if (currentStep > 1 && !isProcessing) {
                                 setCurrentStep(currentStep - 1);
                                 setError(null);
@@ -1075,9 +1115,9 @@ export default function UploadPage() {
                                             prev.map(t => t.tempId === updatedTicket.tempId ? updatedTicket : t)
                                         );
                                     }}
-                                    onFinalize={handleFinalizeAndAnalyze}
+                                    onFinalize={handleContinueYieldReviewToContext}
                                     onCancel={() => { setBackendReviewUploadId(null); setCurrentRecord(null); resetUpload(); }}
-                                    isSaving={isSaving}
+                                    isSaving={false}
                                     linkedFieldName={(() => {
                                         const rec = currentRecord;
                                         if (!rec) return null;
@@ -1093,9 +1133,6 @@ export default function UploadPage() {
                                             ? [...new Set(yieldTickets.map((t) => t.field_name || t.fieldName).filter(Boolean))].join(", ")
                                             : null
                                     }
-                                    registryField={registryFieldForReview}
-                                    contextSnapshot={reviewContextSnapshot}
-                                    documentNote={reviewDocumentNote}
                                 />
                             </>
                         ) : (isSoilDocument(reviewFamily) && extractedTests.length > 0) ? (
@@ -1111,9 +1148,9 @@ export default function UploadPage() {
                                         setExtractedTests(prev => prev.map(t => t.tempId === updatedTest.tempId ? updatedTest : t));
                                     }}
                                     onResetTest={() => {}}
-                                    onFinalize={handleFinalizeAndAnalyze}
+                                    onFinalize={handleContinueSoilReviewToContext}
                                     onCancel={() => { setBackendReviewUploadId(null); setCurrentRecord(null); resetUpload(); }}
-                                    isSaving={isSaving}
+                                    isSaving={false}
                                     linkedFieldName={(() => {
                                         const rec = currentRecord;
                                         if (!rec) return null;
@@ -1127,9 +1164,6 @@ export default function UploadPage() {
                                     extractedZoneFieldSummary={extractedTests.length
                                         ? [...new Set(extractedTests.map((t) => t.zone_name).filter(Boolean))].join(', ')
                                         : null}
-                                    registryField={registryFieldForReview}
-                                    contextSnapshot={reviewContextSnapshot}
-                                    documentNote={reviewDocumentNote}
                                 />
                             </>
                         ) : (
@@ -1146,6 +1180,57 @@ export default function UploadPage() {
                                 </CardContent>
                             </Card>
                         )}
+                    </>
+                )}
+
+                {currentStep === 5 && (
+                    <>
+                        {saveError && (
+                            <Alert variant="destructive" className="mb-4">
+                                <AlertDescription>{saveError}</AlertDescription>
+                            </Alert>
+                        )}
+                        <ReviewContextEnrichment
+                            registryField={registryFieldForReview}
+                            contextSnapshot={reviewContextSnapshot}
+                            documentNote={reviewDocumentNote}
+                            linkedFieldName={(() => {
+                                const rec = currentRecord;
+                                if (!rec) return contextualData?.linkedFieldName ?? null;
+                                const rawCtx = rec.contextSnapshot;
+                                let ctx = null;
+                                if (rawCtx) {
+                                    try {
+                                        ctx = typeof rawCtx === "string" ? JSON.parse(rawCtx) : rawCtx;
+                                    } catch {
+                                        ctx = null;
+                                    }
+                                }
+                                return rec.linkedFieldName ?? ctx?.linkedFieldName ?? contextualData?.linkedFieldName ?? null;
+                            })()}
+                        />
+                        <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
+                            <CardContent className="space-y-2 py-6">
+                                <h3 className="text-lg font-semibold text-green-900">Save to your account</h3>
+                                <p className="text-sm text-green-800">
+                                    Context above is prefilled from field memory and this upload when available. You can skip
+                                    reading it and save — or go back to adjust extracted values.
+                                </p>
+                            </CardContent>
+                            <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 sm:flex-row sm:justify-end">
+                                <Button variant="outline" onClick={() => setCurrentStep(4)} className="border-slate-300">
+                                    Back to data review
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={handleEnrichmentStepSave}
+                                    disabled={isSaving}
+                                    className="bg-green-600 hover:bg-green-700"
+                                >
+                                    {isSaving ? "Saving…" : "Save records"}
+                                </Button>
+                            </div>
+                        </Card>
                     </>
                 )}
             </div>
