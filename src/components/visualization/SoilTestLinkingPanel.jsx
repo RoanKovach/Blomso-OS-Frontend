@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,12 +9,37 @@ import { useToasts } from '@/components/hooks/useToasts';
 const CONFIDENCE_SHOW_MIN = 0.5;
 const CONFIDENCE_STRONG = 0.7;
 
-export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
+function normalizeFieldId(id) {
+  if (id == null) return '';
+  const s = String(id).trim();
+  return s;
+}
+
+/**
+ * True when the field has a non-empty id and appears in the registry from GET /fields
+ * (i.e. persisted on the backend — not a local-only / draft selection).
+ */
+function isPersistedFieldInRegistry(field, registryFields) {
+  const fid = normalizeFieldId(field?.id);
+  if (!fid) return false;
+  if (!Array.isArray(registryFields) || registryFields.length === 0) return false;
+  return registryFields.some((f) => normalizeFieldId(f?.id) === fid);
+}
+
+export default function SoilTestLinkingPanel({ selectedField, registryFields = [], fieldsLoading = false, onLinked }) {
   const [suggestions, setSuggestions] = useState([]);
   const [selectedTests, setSelectedTests] = useState(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const { toast } = useToasts();
+
+  const fieldId = normalizeFieldId(selectedField?.id);
+  const persistedInRegistry = useMemo(
+    () => isPersistedFieldInRegistry(selectedField, registryFields),
+    [selectedField, registryFields]
+  );
+
+  const canRequestSuggestions = Boolean(fieldId) && !fieldsLoading && persistedInRegistry;
 
   const visibleSuggestions = useMemo(
     () =>
@@ -27,12 +52,16 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
     [visibleSuggestions]
   );
 
-  const loadSuggestions = async () => {
-    if (!selectedField) return;
+  const loadSuggestions = useCallback(async () => {
+    if (!canRequestSuggestions || !fieldId) {
+      setSuggestions([]);
+      setSelectedTests(new Set());
+      return;
+    }
 
     setIsLoading(true);
     try {
-      const res = await suggestFieldLinks(selectedField.id);
+      const res = await suggestFieldLinks(fieldId);
       const data = res?.data ?? res;
 
       // Support both { success, suggested_matches } and direct array payloads.
@@ -47,17 +76,15 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
 
       setSuggestions(list);
 
-        const highConfidenceIds = list
-          .filter((match) => (match.confidence_score ?? 0) >= CONFIDENCE_STRONG)
-          .map((match) => match.soil_test_id);
-        setSelectedTests(new Set(highConfidenceIds));
+      const highConfidenceIds = list
+        .filter((match) => (match.confidence_score ?? 0) >= CONFIDENCE_STRONG)
+        .map((match) => match.soil_test_id);
+      setSelectedTests(new Set(highConfidenceIds));
     } catch (error) {
       // Wiped DB / no candidates can surface as 400 depending on backend implementation.
       // Treat as "no suggestions" instead of a scary error.
       const status = error?.status ?? error?.response?.status;
-      const isEmptyState =
-        status === 400 ||
-        status === 404;
+      const isEmptyState = status === 400 || status === 404;
       if (!isEmptyState) {
         console.error('Error loading suggestions:', error);
         toast.error(`Could not load suggestions: ${error.message}`);
@@ -66,16 +93,22 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [canRequestSuggestions, fieldId, toast]);
 
   useEffect(() => {
-    if (selectedField) {
-      loadSuggestions();
-    } else {
+    if (!selectedField) {
       setSuggestions([]);
       setSelectedTests(new Set());
+      return;
     }
-  }, [selectedField]);
+    if (!canRequestSuggestions) {
+      setSuggestions([]);
+      setSelectedTests(new Set());
+      setIsLoading(false);
+      return;
+    }
+    loadSuggestions();
+  }, [selectedField, canRequestSuggestions, loadSuggestions]);
 
   const handleTestSelection = (testId, checked) => {
     const newSelected = new Set(selectedTests);
@@ -88,6 +121,10 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
   };
 
   const handleLinkSelected = async () => {
+    if (!canRequestSuggestions) {
+      toast.error('Save the field first, then try linking soil tests.');
+      return;
+    }
     if (selectedTests.size === 0) {
       toast.error('Please select at least one soil test to link');
       return;
@@ -95,7 +132,7 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
 
     setIsLinking(true);
     try {
-      const res = await applyFieldLinks(selectedField.id, {
+      const res = await applyFieldLinks(fieldId, {
         soil_test_ids: Array.from(selectedTests),
       });
       const data = res?.data ?? res;
@@ -148,6 +185,19 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
   const sub =
     'Suggested from your records — only attach tests you are confident belong to this field.';
 
+  const blockingMessage = (() => {
+    if (!fieldId) {
+      return 'Save this field to your account before soil-test link suggestions can load.';
+    }
+    if (fieldsLoading) {
+      return 'Loading your fields… link suggestions will appear once this field is confirmed in your list.';
+    }
+    if (!persistedInRegistry) {
+      return 'This field is not in your saved field list yet. Finish saving or refresh, then open it again for suggestions.';
+    }
+    return null;
+  })();
+
   return (
     <div className="rounded-md border border-slate-100 bg-white/90 p-2.5">
       <div className="mb-2 flex items-start gap-2">
@@ -158,7 +208,9 @@ export default function SoilTestLinkingPanel({ selectedField, onLinked }) {
         </div>
       </div>
 
-      {isLoading ? (
+      {!canRequestSuggestions ? (
+        <p className="py-1 text-[11px] leading-snug text-slate-500">{blockingMessage}</p>
+      ) : isLoading ? (
         <div className="flex items-center gap-2 py-3 text-xs text-slate-500">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           <span>Checking for matches…</span>

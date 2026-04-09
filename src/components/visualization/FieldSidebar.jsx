@@ -243,7 +243,12 @@ export default function FieldSidebar({
 
           {selectedField && mode === 'view' && (
             <div className="mt-3 border-t border-slate-100 pt-3">
-              <SoilTestLinkingPanel selectedField={selectedField} onLinked={onSoilTestLinked} />
+              <SoilTestLinkingPanel
+                selectedField={selectedField}
+                registryFields={fields}
+                fieldsLoading={isLoading}
+                onLinked={onSoilTestLinked}
+              />
             </div>
           )}
         </div>

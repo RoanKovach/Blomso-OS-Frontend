@@ -5,7 +5,6 @@ import { useConnectionStatus } from '../hooks/useConnectionStatus';
 
 const OFFLINE_EVENTS_KEY = 'blomso_offline_analytics';
 const BATCH_SIZE = 10;
-const FLUSH_INTERVAL = 30000; // 30 seconds
 
 export const useTracking = (options = {}) => {
     const { eventPrefix = 'blomso_', batchingEnabled = true } = options;
@@ -45,19 +44,6 @@ export const useTracking = (options = {}) => {
                 flushEvents();
             }
         }
-    }, [isOnline, pendingEvents.length, batchingEnabled, isTrackingAvailable]); // Added isTrackingAvailable to deps
-
-    // Auto-flush events periodically
-    useEffect(() => {
-        if (!batchingEnabled || !isTrackingAvailable) return; // Added isTrackingAvailable check
-
-        const interval = setInterval(() => {
-            if (isOnline && pendingEvents.length > 0) {
-                flushEvents();
-            }
-        }, FLUSH_INTERVAL);
-
-        return () => clearInterval(interval);
     }, [isOnline, pendingEvents.length, batchingEnabled, isTrackingAvailable]); // Added isTrackingAvailable to deps
 
     const flushEvents = useCallback(async () => {
@@ -106,6 +92,18 @@ export const useTracking = (options = {}) => {
             setPendingEvents(prev => [...prev, ...failedNonBlockingEvents]);
         }
     }, [pendingEvents, isTrackingAvailable]); // Removed setIsTrackingAvailable from deps as it's a stable setter
+
+    // Flush when the user leaves the tab (no fixed 30s timer — avoids periodic network bursts)
+    useEffect(() => {
+        if (!batchingEnabled || !isTrackingAvailable) return;
+        const onVisibility = () => {
+            if (document.visibilityState !== 'hidden') return;
+            if (!isOnline) return;
+            void flushEvents();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, [batchingEnabled, isTrackingAvailable, isOnline, flushEvents]);
 
     const track = useCallback(async (eventName, properties = {}) => {
         // Silently skip if tracking is not available
