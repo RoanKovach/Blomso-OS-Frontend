@@ -37,6 +37,23 @@ import { blobFromExportSoilTestsResponse } from "./exportSoilTestsResponse";
 import { formatDateOnlySafe } from "./dateUtils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+/**
+ * Incoming inbox: show uploads still in the workflow — not duplicates of saved canonical rows below.
+ * Hidden when any normalized soil or yield row points at this upload via sourceUploadId, or when the
+ * upload row itself is marked with a terminal success status from the API.
+ */
+function shouldShowUploadInInbox(rec, soilTests, yieldRecords) {
+    const raw = String(rec.extractionStatus ?? rec.status ?? "uploaded").toLowerCase();
+
+    if (soilTests.some((t) => t.sourceUploadId === rec.id)) return false;
+    if (yieldRecords.some((y) => (y.sourceUploadId ?? y.source_upload_id) === rec.id)) return false;
+
+    const terminalSuccessOnUploadRow = new Set(["saved", "completed", "complete", "normalized"]);
+    if (terminalSuccessOnUploadRow.has(raw)) return false;
+
+    return true;
+}
+
 function YieldExpandableRow({ rec, fieldContext, onOpenMap }) {
     const ticketNumber = rec.ticket_number ?? rec.ticketNumber ?? "—";
     const cropRaw = rec.crop ?? rec.crop_type ?? "—";
@@ -234,10 +251,15 @@ export default function SoilTestsTab() {
     /** Field id -> acres when Field.list() provides it */
     const [fieldAcresMap, setFieldAcresMap] = useState(new Map());
     const [canonicalFields, setCanonicalFields] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    /** Full-page skeleton only until the first load attempt finishes. */
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    /** True during poll/manual refresh after we already have (or had) data on screen. */
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const initialLoadCompletedRef = useRef(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-    const [testToDelete, setTestToDelete] = useState(null);
+    /** Unified delete modal: soil | yield (DELETE /records/:id; upload delete not supported by API). */
+    const [deleteTarget, setDeleteTarget] = useState(null);
     const [testToEdit, setTestToEdit] = useState(null);
     const [viewMode, setViewMode] = useState('list');
     const [user, setUser] = useState(null);
@@ -267,12 +289,18 @@ export default function SoilTestsTab() {
     const location = useLocation();
 
     const loadTests = useCallback(async () => {
-        setIsLoading(true);
+        const background = initialLoadCompletedRef.current;
+        if (background) {
+            setIsRefreshing(true);
+        } else {
+            setIsInitialLoading(true);
+        }
         setLoadError(null);
-        
+
+        try {
         // Guest User Flow Priority 1: Check session storage for persisted guest data
         const guestData = sessionStorage.getItem('guestSoilTests');
-        
+
         if (guestData) {
             try {
                 const parsedData = JSON.parse(guestData);
@@ -284,7 +312,6 @@ export default function SoilTestsTab() {
                 console.error("Failed to parse guest data from session storage:", e);
                 sessionStorage.removeItem('guestSoilTests'); // Clear corrupted data
             }
-            setIsLoading(false);
             return;
         }
 
@@ -296,7 +323,6 @@ export default function SoilTestsTab() {
             setIsAnonymousUser(true);
             setIsDemo(true);
             setBackendRecordsMode(false);
-            setIsLoading(false);
             // Clear the state to prevent re-loading on refresh
             window.history.replaceState({}, document.title);
             return;
@@ -310,7 +336,6 @@ export default function SoilTestsTab() {
             setIsAnonymousUser(true);
             setIsDemo(true);
             setBackendRecordsMode(false);
-            setIsLoading(false);
             // Clear the state to prevent re-loading on refresh
             window.history.replaceState({}, document.title);
             return;
@@ -377,7 +402,12 @@ export default function SoilTestsTab() {
                 }));
                 setUploadRecords(uploads);
                 setTests(displayTests);
-                setYieldRecords(yieldNormalized || []);
+                setYieldRecords(
+                    (yieldNormalized || []).map((r) => ({
+                        ...r,
+                        sourceUploadId: r.sourceUploadId ?? r.source_upload_id ?? null,
+                    }))
+                );
                 setBackendRecordsMode(true);
                 try {
                     const raw = await Field.list();
@@ -403,8 +433,11 @@ export default function SoilTestsTab() {
             console.error("Error in loadTests:", error);
             setLoadError(`Failed to load your soil tests: ${error.message || 'Unknown error'}`);
         }
-        
-        setIsLoading(false);
+        } finally {
+            initialLoadCompletedRef.current = true;
+            setIsInitialLoading(false);
+            setIsRefreshing(false);
+        }
     }, [location.state]);
 
     useEffect(() => {
@@ -412,22 +445,35 @@ export default function SoilTestsTab() {
     }, [loadTests]);
 
     useEffect(() => {
-        if (isLoading) return;
+        if (isInitialLoading) return;
         if (location.hash !== "#export") return;
         requestAnimationFrame(() => {
             document.getElementById("export")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
-    }, [isLoading, location.hash]);
+    }, [isInitialLoading, location.hash]);
 
-    const NON_TERMINAL_STATUSES = ['uploaded', 'extracting', 'processing', 'needs_review'];
+    const INBOX_POLL_STATUSES = new Set([
+        "uploaded",
+        "extracting",
+        "processing",
+        "extracted",
+        "needs_review",
+        "failed",
+        "extraction_failed",
+    ]);
+
+    const uploadRecordsInbox = useMemo(() => {
+        if (!backendRecordsMode) return uploadRecords;
+        return uploadRecords.filter((rec) => shouldShowUploadInInbox(rec, tests, yieldRecords));
+    }, [backendRecordsMode, uploadRecords, tests, yieldRecords]);
+
     const hasNonTerminalUploads = useMemo(() => {
-        if (!backendRecordsMode || !uploadRecords.length) return false;
-        return uploadRecords.some((rec) => {
-            const status = rec.extractionStatus ?? rec.status ?? 'uploaded';
-            const hasSaved = tests.some((t) => t.sourceUploadId === rec.id);
-            return (NON_TERMINAL_STATUSES.includes(status) || (status === 'needs_review' && !hasSaved));
+        if (!backendRecordsMode || !uploadRecordsInbox.length) return false;
+        return uploadRecordsInbox.some((rec) => {
+            const status = rec.extractionStatus ?? rec.status ?? "uploaded";
+            return INBOX_POLL_STATUSES.has(status);
         });
-    }, [backendRecordsMode, uploadRecords, tests]);
+    }, [backendRecordsMode, uploadRecordsInbox]);
 
     useEffect(() => {
         if (!hasNonTerminalUploads) return;
@@ -470,34 +516,75 @@ export default function SoilTestsTab() {
         }
     }, [location.state, loadTests, isAnonymousUser]);
 
-    const handleDeleteConfirm = async () => {
-        if (!testToDelete) return;
-
-        // For guests, delete from local state and session storage.
+    const deleteModalCopy = useCallback((target) => {
+        if (!target) return { title: "Delete?", description: "" };
         if (isAnonymousUser) {
-            const updatedTests = tests.filter(t => t.id !== testToDelete.id);
-            setTests(updatedTests);
-            sessionStorage.setItem('guestSoilTests', JSON.stringify(updatedTests));
-            toast.success("Demo record removed.");
-            setTestToDelete(null);
+            return {
+                title: "Remove this record?",
+                description:
+                    target.kind === "soil"
+                        ? "This will remove the demo soil test from your current session."
+                        : "Sign in to remove this item from your account.",
+            };
+        }
+        if (target.kind === "soil") {
+            return {
+                title: "Permanently delete this soil test?",
+                description:
+                    "This will delete the saved soil test and its stored analysis. This action cannot be undone.",
+            };
+        }
+        if (target.kind === "yield") {
+            return {
+                title: "Permanently delete this yield ticket?",
+                description:
+                    "This will delete the saved yield ticket record. This action cannot be undone. (Requires API support for normalized yield rows.)",
+            };
+        }
+        return { title: "Delete?", description: "" };
+    }, [isAnonymousUser]);
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteTarget) return;
+        const { kind, record } = deleteTarget;
+        const id = record?.id;
+        if (!id) {
+            setDeleteTarget(null);
             return;
         }
 
-        // For authenticated users, delete from backend (normalized_soil_test via /records/{id}).
+        if (isAnonymousUser) {
+            if (kind === "soil") {
+                const updatedTests = tests.filter((t) => t.id !== id);
+                setTests(updatedTests);
+                sessionStorage.setItem("guestSoilTests", JSON.stringify(updatedTests));
+                toast.success("Demo record removed.");
+            } else {
+                toast.error("Sign in to delete uploads or yield tickets from the server.");
+            }
+            setDeleteTarget(null);
+            return;
+        }
+
         setIsDeleting(true);
         try {
-            const res = await deleteRecord(testToDelete.id);
+            const res = await deleteRecord(id);
             if (!res.ok) {
                 throw new Error(res.error || "Backend delete failed");
             }
             toast.success("Record deleted successfully.");
-            setTests(tests.filter(t => t.id !== testToDelete.id));
+            if (kind === "soil") {
+                setTests((prev) => prev.filter((t) => t.id !== id));
+            } else if (kind === "yield") {
+                setYieldRecords((prev) => prev.filter((r) => r.id !== id));
+            }
         } catch (error) {
-            console.error("Error deleting soil test:", error);
-            toast.error("Failed to delete record.");
+            console.error("Error deleting record:", error);
+            toast.error(error?.message || "Failed to delete record.");
+        } finally {
+            setIsDeleting(false);
+            setDeleteTarget(null);
         }
-        setIsDeleting(false);
-        setTestToDelete(null);
     };
 
     const handleUpdateTest = async (testIdOrObject, updatedData) => {
@@ -641,10 +728,19 @@ export default function SoilTestsTab() {
     );
 
     const getUploadDisplayStatus = useCallback((rec) => {
-        const rawStatus = rec.extractionStatus ?? rec.status ?? 'uploaded';
-        const hasSavedNormalized = tests.some((t) => t.sourceUploadId === rec.id);
-        return hasSavedNormalized && rawStatus === 'needs_review' ? 'saved' : rawStatus;
-    }, [tests]);
+        const rawStatus = rec.extractionStatus ?? rec.status ?? "uploaded";
+        const hasSavedSoil = tests.some((t) => t.sourceUploadId === rec.id);
+        const hasSavedYield = yieldRecords.some(
+            (y) => (y.sourceUploadId ?? y.source_upload_id) === rec.id
+        );
+        if (
+            (hasSavedSoil || hasSavedYield) &&
+            (rawStatus === "needs_review" || rawStatus === "extracted")
+        ) {
+            return "saved";
+        }
+        return rawStatus;
+    }, [tests, yieldRecords]);
 
     const filterOptions = useMemo(() => {
         if (!backendRecordsMode) {
@@ -655,7 +751,7 @@ export default function SoilTestsTab() {
         const crops = new Set();
         const statuses = new Set();
 
-        uploadRecords.forEach((rec) => {
+        uploadRecordsInbox.forEach((rec) => {
             const ctx = getContext(rec);
             const fieldName =
                 (rec.linkedFieldId && fieldsMap.get(rec.linkedFieldId)) ||
@@ -688,11 +784,21 @@ export default function SoilTestsTab() {
             crops: Array.from(crops).sort((a, b) => String(a).localeCompare(String(b))),
             statuses: Array.from(statuses).sort((a, b) => String(a).localeCompare(String(b))),
         };
-    }, [backendRecordsMode, uploadRecords, tests, yieldRecords, fieldsMap, sourceUploadMap, getSavedSoilDisplay, getUploadDisplayStatus, getContext]);
+    }, [
+        backendRecordsMode,
+        uploadRecordsInbox,
+        tests,
+        yieldRecords,
+        fieldsMap,
+        sourceUploadMap,
+        getSavedSoilDisplay,
+        getUploadDisplayStatus,
+        getContext,
+    ]);
 
     const filteredUploadRecords = useMemo(() => {
         if (!backendRecordsMode) return uploadRecords;
-        return uploadRecords.filter((rec) => {
+        return uploadRecordsInbox.filter((rec) => {
             const ctx = getContext(rec);
             const displayFieldName =
                 (rec.linkedFieldId && fieldsMap.get(rec.linkedFieldId)) ||
@@ -711,7 +817,7 @@ export default function SoilTestsTab() {
             if (recordFilters.family !== "all" && family !== recordFilters.family) return false;
             return true;
         });
-    }, [backendRecordsMode, uploadRecords, recordFilters, getUploadDisplayStatus, fieldsMap, getContext]);
+    }, [backendRecordsMode, uploadRecords, uploadRecordsInbox, recordFilters, getUploadDisplayStatus, fieldsMap, getContext]);
 
     const filteredSavedSoil = useMemo(() => {
         if (!backendRecordsMode) return tests;
@@ -1063,7 +1169,7 @@ export default function SoilTestsTab() {
         });
     };
 
-    if (isLoading) {
+    if (isInitialLoading) {
         return (
             <div className="space-y-4">
                 <Skeleton className="w-full h-64" />
@@ -1092,6 +1198,15 @@ export default function SoilTestsTab() {
 
     return (
         <div className="space-y-4">
+            {isRefreshing && backendRecordsMode && (
+                <div
+                    className="h-0.5 w-full overflow-hidden rounded-full bg-emerald-100"
+                    aria-busy="true"
+                    aria-label="Refreshing records"
+                >
+                    <div className="h-full w-1/3 animate-pulse bg-emerald-600/45" />
+                </div>
+            )}
             {(isDemo || isAnonymousUser) && (
                 <Alert className="bg-blue-50 border-blue-200 text-blue-800">
                     <Info className="h-4 w-4 !text-blue-800" />
@@ -1242,8 +1357,10 @@ export default function SoilTestsTab() {
                             <Card className="text-center p-6">
                                 <p className="text-gray-600">
                                     {uploadRecords.length === 0
-                                        ? 'No uploads yet. Upload a PDF to see it here.'
-                                        : 'No uploads match the selected filters.'}
+                                        ? "No uploads yet. Upload a PDF to see it here."
+                                        : uploadRecordsInbox.length === 0
+                                          ? "Your inbox is empty. Documents that are fully saved appear only under Saved records below."
+                                          : "No inbox items match the selected filters."}
                                 </p>
                                 <Button onClick={() => navigate(createPageUrl("Upload"))} className="mt-3 bg-green-600 hover:bg-green-700">Add data</Button>
                             </Card>
@@ -1469,7 +1586,7 @@ export default function SoilTestsTab() {
                                                                 <TableCell>{formatLastUpdated(test.updated_date)}</TableCell>
                                                                 <TableCell className="space-x-2">
                                                                     <Button variant="ghost" size="icon" onClick={() => setTestToEdit(test)}><Edit className="w-4 h-4" /></Button>
-                                                                    <Button variant="ghost" size="icon" onClick={() => setTestToDelete(test)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                                                                    <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ kind: "soil", record: test })}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                                                                 </TableCell>
                                                             </TableRow>
                                                             {expandedRows.has(test.id) && (
@@ -1537,7 +1654,7 @@ export default function SoilTestsTab() {
                                                     <TableHead>Net Bushels</TableHead>
                                                     <TableHead>Price/Bu</TableHead>
                                                     <TableHead>Last Updated</TableHead>
-                                                    <TableHead></TableHead>
+                                                    <TableHead className="text-right">Actions</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -1619,7 +1736,20 @@ export default function SoilTestsTab() {
                                                                 <TableCell>{netBushels}</TableCell>
                                                                 <TableCell>{price}</TableCell>
                                                                 <TableCell>{lastUpdated}</TableCell>
-                                                                <TableCell />
+                                                                <TableCell className="text-right">
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="text-red-600 hover:text-red-700"
+                                                                        title="Delete yield ticket"
+                                                                        onClick={() =>
+                                                                            setDeleteTarget({ kind: "yield", record: rec })
+                                                                        }
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </TableCell>
                                                             </TableRow>
                                                             {expandedYieldRows.has(rec.id) && (
                                                                 <TableRow>
@@ -1738,7 +1868,7 @@ export default function SoilTestsTab() {
                                                             <Button variant="ghost" size="icon" onClick={() => setTestToEdit(test)}>
                                                                 <Edit className="w-4 h-4" />
                                                             </Button>
-                                                            <Button variant="ghost" size="icon" onClick={() => setTestToDelete(test)}>
+                                                            <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ kind: "soil", record: test })}>
                                                                 <Trash2 className="w-4 h-4 text-red-500" />
                                                             </Button>
                                                         </TableCell>
@@ -1818,7 +1948,7 @@ export default function SoilTestsTab() {
                                                     <Edit className="w-3 h-3 mr-1" /> 
                                                     <span className="truncate">Edit</span>
                                                 </Button>
-                                                <Button variant="destructive" size="sm" onClick={() => setTestToDelete(test)} className="flex-1 min-w-0">
+                                                <Button variant="destructive" size="sm" onClick={() => setDeleteTarget({ kind: "soil", record: test })} className="flex-1 min-w-0">
                                                     <Trash2 className="w-3 h-3 mr-1" /> 
                                                     <span className="truncate">Delete</span>
                                                 </Button>
@@ -1835,7 +1965,7 @@ export default function SoilTestsTab() {
                         <GridView
                             tests={tests}
                             onEdit={handleUpdateTest}
-                            onDelete={(test) => setTestToDelete(test)}
+                            onDelete={(test) => setDeleteTarget({ kind: "soil", record: test })}
                             isDemo={isDemo || isAnonymousUser}
                         />
                     </TabsContent>
@@ -1863,11 +1993,15 @@ export default function SoilTestsTab() {
             />
 
             <ConfirmationModal
-                isOpen={!!testToDelete}
-                onClose={() => setTestToDelete(null)}
+                isOpen={!!deleteTarget}
+                onClose={() => {
+                    if (!isDeleting) setDeleteTarget(null);
+                }}
                 onConfirm={handleDeleteConfirm}
-                title="Permanently delete this record?"
-                description={isAnonymousUser ? "This will remove the demo record from your current session." : "This will delete the soil test and all its associated analysis. This action cannot be undone."}
+                title={deleteModalCopy(deleteTarget).title}
+                description={deleteModalCopy(deleteTarget).description}
+                confirmLabel="Delete"
+                isSubmitting={isDeleting}
             />
 
             <EditSoilTestModal

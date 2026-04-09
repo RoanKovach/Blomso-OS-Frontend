@@ -19,6 +19,7 @@ import FieldWorkbenchPanel from "../components/visualization/FieldWorkbenchPanel
 import { useFieldStory } from "../components/hooks/useFieldStory";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Layers, PanelLeft, MapPinned, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -869,87 +870,104 @@ function FieldVisualizationContent() {
                 />
 
                 {mapReady && mapInstance && (
-                    <div className="pointer-events-none absolute right-4 top-4 z-[900] max-w-[min(100vw-2rem,16rem)] md:right-4 md:top-4">
-                        <div
-                            className="pointer-events-auto max-h-[min(420px,calc(100vh-7rem))] overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-lg shadow-slate-900/15 backdrop-blur-md"
-                            role="group"
-                            aria-label="Map overlays"
-                        >
-                            <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
-                                <div className="flex items-center gap-2">
-                                    <Layers className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
-                                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                                        Layers
-                                    </span>
-                                </div>
-                                <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                                    Satellite imagery is the base map. Optional overlays below.
-                                </p>
-                            </div>
-                            <div className="flex flex-col gap-0.5 p-1.5">
-                                <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex min-w-0 items-center gap-2">
-                                            <input
-                                                type="checkbox"
-                                                id="layers-ssurgo"
-                                                checked={showSSURGO}
-                                                onChange={(e) => handleSSURGOToggle(e.target.checked)}
-                                                className="rounded border-gray-300"
-                                                disabled={ssurgoLoading}
-                                                aria-label="SSURGO soil types overlay"
-                                            />
-                                            <label
-                                                htmlFor="layers-ssurgo"
-                                                className="cursor-pointer text-xs text-slate-800"
-                                                title="USDA soil-series polygons (reference overlay)"
-                                            >
-                                                SSURGO soil types
-                                            </label>
-                                            <Badge
-                                                variant="outline"
-                                                className="shrink-0 border-amber-200 bg-amber-50 text-[10px] text-amber-800"
-                                            >
-                                                Demo
-                                            </Badge>
-                                        </div>
-                                        {ssurgoLoading && (
-                                            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-500" />
-                                        )}
-                                    </div>
-                                    <p className="mt-1 text-[10px] leading-snug text-slate-500">
-                                        Reference only — not a substitute for uploaded soil test evidence.
-                                    </p>
-                                </div>
-                                <p
-                                    className="rounded-lg px-2.5 py-2 text-[11px] leading-snug text-slate-500"
-                                    role="note"
-                                >
-                                    NDVI (vegetation index): not available yet — coming later.
-                                </p>
-                                <button
+                    <div className="pointer-events-none absolute right-4 top-4 z-[900] md:right-4 md:top-4">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
                                     type="button"
-                                    className={`${layerControlBtn} ${
-                                        layerToggle.parcels
-                                            ? "bg-amber-800 text-white shadow-sm"
-                                            : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
-                                    }`}
-                                    onClick={() => toggleRasterLayer(PARCELS_LAYER, "parcels")}
+                                    variant="secondary"
+                                    size="icon"
+                                    className="pointer-events-auto h-9 w-9 shrink-0 rounded-lg border border-slate-200/90 bg-white/95 shadow-md backdrop-blur-sm hover:bg-white"
+                                    aria-label="Map options and layers"
+                                    title="Map options"
                                 >
-                                    <MapPinned className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                                    <span>Parcels</span>
-                                </button>
-                            </div>
-                            {layerToggle.parcels &&
-                                mapZoom > 0 &&
-                                mapZoom < parcelMinZoom &&
-                                mapConfig?.layers?.parcels?.tiles?.length > 0 && (
-                                    <p className="border-t border-slate-100 px-3 py-2 text-[11px] leading-snug text-slate-500">
-                                        Zoom in for clearer parcel lines (current maps often sharpen
-                                        above zoom {parcelMinZoom}).
-                                    </p>
-                                )}
-                        </div>
+                                    <Layers className="h-4 w-4 text-slate-700" aria-hidden />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                                className="w-[min(100vw-2rem,16rem)] max-h-[min(420px,calc(100vh-7rem))] overflow-y-auto overflow-x-hidden p-0"
+                                align="end"
+                                sideOffset={8}
+                                collisionPadding={12}
+                            >
+                                <div className="rounded-md border border-slate-200/90 bg-white shadow-sm" role="group" aria-label="Map overlays">
+                                    <div className="border-b border-slate-100 bg-slate-50/90 px-3 py-2">
+                                        <div className="flex items-center gap-2">
+                                            <Layers className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
+                                            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                                Map options
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                                            Satellite imagery is the base map. Optional overlays below.
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col gap-0.5 p-1.5">
+                                        <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-2.5 py-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex min-w-0 items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="layers-ssurgo"
+                                                        checked={showSSURGO}
+                                                        onChange={(e) => handleSSURGOToggle(e.target.checked)}
+                                                        className="rounded border-gray-300"
+                                                        disabled={ssurgoLoading}
+                                                        aria-label="SSURGO soil types overlay"
+                                                    />
+                                                    <label
+                                                        htmlFor="layers-ssurgo"
+                                                        className="cursor-pointer text-xs text-slate-800"
+                                                        title="USDA soil-series polygons (reference overlay)"
+                                                    >
+                                                        SSURGO soil types
+                                                    </label>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="shrink-0 border-amber-200 bg-amber-50 text-[10px] text-amber-800"
+                                                    >
+                                                        Demo
+                                                    </Badge>
+                                                </div>
+                                                {ssurgoLoading && (
+                                                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-500" />
+                                                )}
+                                            </div>
+                                            <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                                                Reference only — not a substitute for uploaded soil test evidence.
+                                            </p>
+                                        </div>
+                                        <p
+                                            className="rounded-lg px-2.5 py-2 text-[11px] leading-snug text-slate-500"
+                                            role="note"
+                                        >
+                                            NDVI (vegetation index): not available yet — coming later.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            className={`${layerControlBtn} ${
+                                                layerToggle.parcels
+                                                    ? "bg-amber-800 text-white shadow-sm"
+                                                    : "bg-slate-100/80 text-slate-800 hover:bg-slate-200/90"
+                                            }`}
+                                            onClick={() => toggleRasterLayer(PARCELS_LAYER, "parcels")}
+                                        >
+                                            <MapPinned className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                                            <span>Parcels</span>
+                                        </button>
+                                    </div>
+                                    {layerToggle.parcels &&
+                                        mapZoom > 0 &&
+                                        mapZoom < parcelMinZoom &&
+                                        mapConfig?.layers?.parcels?.tiles?.length > 0 && (
+                                            <p className="border-t border-slate-100 px-3 py-2 text-[11px] leading-snug text-slate-500">
+                                                Zoom in for clearer parcel lines (current maps often sharpen
+                                                above zoom {parcelMinZoom}).
+                                            </p>
+                                        )}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                     </div>
                 )}
 
