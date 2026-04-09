@@ -18,8 +18,8 @@ function sanitizeReturnTo(value) {
 /**
  * OAuth callback for Cognito Hosted UI.
  *
- * Stores the id_token as the API Bearer token.
- * Also persists access_token separately when present.
+ * Stores the OAuth access_token as the API Bearer token (API Gateway expects access token).
+ * Optionally persists id_token for non-API use (claims / future UI).
  */
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -40,20 +40,19 @@ export default function AuthCallback() {
       return () => clearTimeout(t);
     }
 
-    // Optional: store access token separately (not used for API auth here).
-    if (accessToken) {
+    if (idToken) {
       try {
-        localStorage.setItem('blomso_access_token', accessToken);
+        localStorage.setItem('blomso_id_token', idToken);
       } catch (_) {}
     }
 
-    if (idToken) {
-      setAuthToken(idToken);
+    if (accessToken) {
+      setAuthToken(accessToken);
       window.location.replace(window.location.origin + returnTo);
       return;
     }
 
-    setMessage('No token received. Redirecting...');
+    setMessage('No access token received. Redirecting...');
     const t = setTimeout(() => navigate(returnTo, { replace: true }), 1500);
     return () => clearTimeout(t);
   }, [navigate]);

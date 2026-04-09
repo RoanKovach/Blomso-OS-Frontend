@@ -83,6 +83,8 @@ export const User = {
     try {
       localStorage.removeItem('blomso_auth_token');
       sessionStorage.removeItem('blomso_auth_token');
+      localStorage.removeItem('blomso_id_token');
+      localStorage.removeItem('blomso_access_token');
     } catch (_) {}
     const logoutUrl = getLogoutUrl();
     if (logoutUrl) {

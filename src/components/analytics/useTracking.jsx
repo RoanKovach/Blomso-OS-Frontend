@@ -67,26 +67,29 @@ export const useTracking = (options = {}) => {
         setPendingEvents([]); // Clear immediately, will re-add only failed non-blocking events later.
 
         const failedNonBlockingEvents = [];
-        let blockingErrorDetected = false;
+        let hardStop = false;
 
         await Promise.all(
             eventsToAttempt.map(async (eventData) => {
-                // If a blocking error has already been detected, don't attempt to send further events in this batch
-                if (blockingErrorDetected) {
-                    // However, ensure events that weren't sent due to this early exit are handled.
-                    // For simplicity, if blockingErrorDetected is true, all subsequent events in this batch are effectively dropped.
-                    // The assumption is that if one event causes a block, all will.
-                    return; 
+                if (hardStop) {
+                    return;
                 }
 
                 try {
                     await apiTrackEvent(eventData);
                 } catch (error) {
+                    const status = error?.status;
+                    if (status === 401 || status === 403) {
+                        setIsTrackingAvailable(false);
+                        hardStop = true;
+                        console.warn('Analytics disabled: auth error during flush (not requeuing).');
+                        return;
+                    }
                     const errorMessage = error?.message || error?.detail || '';
                     if (errorMessage.includes('subscription tier') || errorMessage.includes('blocked') || errorMessage.includes('Functions are blocked')) {
                         console.warn('Analytics tracking disabled due to subscription tier during flush.');
-                        blockingErrorDetected = true; // Mark as detected
-                        setIsTrackingAvailable(false); // Update state to disable tracking
+                        hardStop = true;
+                        setIsTrackingAvailable(false);
                     } else {
                         console.warn('Failed to send individual analytics event during flush (will retry):', error);
                         failedNonBlockingEvents.push(eventData);
@@ -95,11 +98,9 @@ export const useTracking = (options = {}) => {
             })
         );
 
-        if (blockingErrorDetected) {
-            // If a blocking error was detected, all events that were part of this flush are effectively abandoned.
-            // No need to re-add.
+        if (hardStop) {
             console.warn('Analytics disabled. Dropping unsent pending events.');
-            setPendingEvents([]); // Ensure pending events are fully cleared if tracking is disabled
+            setPendingEvents([]);
         } else if (failedNonBlockingEvents.length > 0) {
             // If no blocking error, but some events failed for other reasons, re-add them.
             setPendingEvents(prev => [...prev, ...failedNonBlockingEvents]);
@@ -129,15 +130,19 @@ export const useTracking = (options = {}) => {
             try {
                 await apiTrackEvent(eventData);
             } catch (error) {
-                // Check if it's a subscription tier or blocking error
+                const status = error?.status;
+                if (status === 401 || status === 403) {
+                    setIsTrackingAvailable(false);
+                    console.warn('Analytics disabled: auth error (not requeuing).');
+                    return;
+                }
                 const errorMessage = error?.message || error?.detail || '';
                 if (errorMessage.includes('subscription tier') || errorMessage.includes('blocked') || errorMessage.includes('Functions are blocked')) {
                     console.warn('Analytics tracking disabled due to subscription tier or blocked request.');
-                    setIsTrackingAvailable(false); // Disable tracking permanently for this session
-                    return; // Stop tracking this event and future ones
+                    setIsTrackingAvailable(false);
+                    return;
                 }
                 console.warn('Analytics tracking failed:', error);
-                // Add to pending events as fallback for non-blocking errors
                 setPendingEvents(prev => [...prev, eventData]);
             }
         }

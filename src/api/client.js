@@ -15,7 +15,10 @@ function getAuthToken() {
   }
 }
 
-/** Store IdToken for authenticated backend calls. Used after Cognito login or for testing. */
+/**
+ * Persist OAuth access token for API Authorization (Cognito Hosted UI hash).
+ * Prefer Cognito access_token, not id_token, for API Gateway JWT authorizers.
+ */
 export function setAuthToken(token) {
   try {
     if (token) {
@@ -27,9 +30,22 @@ export function setAuthToken(token) {
   } catch (_) {}
 }
 
-export function authHeaders() {
-  const token = getAuthToken();
+async function resolveBearerAccessToken() {
+  const poolId = import.meta.env.VITE_COGNITO_USER_POOL_ID?.trim();
+  if (poolId) {
+    try {
+      const { fetchAuthSession } = await import('aws-amplify/auth');
+      const session = await fetchAuthSession();
+      const token = session.tokens?.accessToken?.toString();
+      if (token) return token;
+    } catch (_) {}
+  }
+  return getAuthToken();
+}
+
+export async function authHeaders() {
   const headers = { 'Content-Type': 'application/json' };
+  const token = await resolveBearerAccessToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 }
@@ -44,10 +60,14 @@ export async function apiGet(path, options = {}) {
   if (!BASE_URL) {
     throw new Error('API URL not configured. Set VITE_API_URL in your environment.');
   }
+  const { headers: optionHeaders, ...restOptions } = options;
   const res = await fetch(getUrl(path), {
     method: 'GET',
-    headers: authHeaders(),
-    ...options,
+    ...restOptions,
+    headers: {
+      ...(await authHeaders()),
+      ...optionHeaders,
+    },
   });
   if (!res.ok) {
     const err = new Error(res.statusText || `Request failed: ${res.status}`);
@@ -64,11 +84,15 @@ export async function apiPost(path, body, options = {}) {
   if (!BASE_URL) {
     throw new Error('API URL not configured. Set VITE_API_URL in your environment.');
   }
+  const { headers: optionHeaders, ...restOptions } = options;
   const res = await fetch(getUrl(path), {
     method: 'POST',
-    headers: authHeaders(),
     body: typeof body === 'string' ? body : JSON.stringify(body ?? {}),
-    ...options,
+    ...restOptions,
+    headers: {
+      ...(await authHeaders()),
+      ...optionHeaders,
+    },
   });
   if (!res.ok) {
     const err = new Error(res.statusText || `Request failed: ${res.status}`);
@@ -85,11 +109,15 @@ export async function apiPut(path, body, options = {}) {
   if (!BASE_URL) {
     throw new Error('API URL not configured. Set VITE_API_URL in your environment.');
   }
+  const { headers: optionHeaders, ...restOptions } = options;
   const res = await fetch(getUrl(path), {
     method: 'PUT',
-    headers: authHeaders(),
     body: typeof body === 'string' ? body : JSON.stringify(body ?? {}),
-    ...options,
+    ...restOptions,
+    headers: {
+      ...(await authHeaders()),
+      ...optionHeaders,
+    },
   });
   if (!res.ok) {
     const err = new Error(res.statusText || `Request failed: ${res.status}`);
@@ -106,11 +134,15 @@ export async function apiPatch(path, body, options = {}) {
   if (!BASE_URL) {
     throw new Error('API URL not configured. Set VITE_API_URL in your environment.');
   }
+  const { headers: optionHeaders, ...restOptions } = options;
   const res = await fetch(getUrl(path), {
     method: 'PATCH',
-    headers: authHeaders(),
     body: typeof body === 'string' ? body : JSON.stringify(body ?? {}),
-    ...options,
+    ...restOptions,
+    headers: {
+      ...(await authHeaders()),
+      ...optionHeaders,
+    },
   });
   if (!res.ok) {
     const err = new Error(res.statusText || `Request failed: ${res.status}`);
@@ -127,10 +159,14 @@ export async function apiDelete(path, options = {}) {
   if (!BASE_URL) {
     throw new Error('API URL not configured. Set VITE_API_URL in your environment.');
   }
+  const { headers: optionHeaders, ...restOptions } = options;
   const res = await fetch(getUrl(path), {
     method: 'DELETE',
-    headers: authHeaders(),
-    ...options,
+    ...restOptions,
+    headers: {
+      ...(await authHeaders()),
+      ...optionHeaders,
+    },
   });
   if (!res.ok) {
     const err = new Error(res.statusText || `Request failed: ${res.status}`);
@@ -147,15 +183,18 @@ export async function apiPostForm(path, formData, options = {}) {
   if (!BASE_URL) {
     throw new Error('API URL not configured. Set VITE_API_URL in your environment.');
   }
-  const token = getAuthToken();
+  const jsonHeaders = await authHeaders();
+  const { headers: optionHeaders, ...restOptions } = options;
   const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  // Do not set Content-Type; browser sets multipart boundary for FormData
+  if (jsonHeaders['Authorization']) {
+    headers['Authorization'] = jsonHeaders['Authorization'];
+  }
+  Object.assign(headers, optionHeaders);
   const res = await fetch(getUrl(path), {
     method: 'POST',
-    headers,
     body: formData,
-    ...options,
+    ...restOptions,
+    headers,
   });
   if (!res.ok) {
     const err = new Error(res.statusText || `Request failed: ${res.status}`);

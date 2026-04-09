@@ -9,7 +9,7 @@ import { createPageUrl } from "@/utils";
 import { createFieldDeepLink } from "@/components/utils/createFieldDeepLink";
 import { User } from "@/api/entities";
 import { isUnauthenticatedError } from "@/api/auth";
-import { isApiConfigured, setAuthToken } from "@/api/client";
+import { isApiConfigured } from "@/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from 'sonner';
 
