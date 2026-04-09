@@ -577,7 +577,7 @@ function FieldVisualizationContent() {
 
     useEffect(() => {
         const map = mapRef.current;
-        if (!mapReady || !map?.loaded?.()) return;
+        if (!mapReady || !map) return;
 
         const onClick = (e) => {
             // In draw mode, map clicks add vertices only in "place" — not select fields underneath.
@@ -617,7 +617,7 @@ function FieldVisualizationContent() {
     /** Draw mode: disable drag-pan while placing points so clicks don't become pans */
     useEffect(() => {
         const map = mapRef.current;
-        if (!mapReady || !map?.loaded?.()) return;
+        if (!mapReady || !map) return;
         const inDraw = mode === "draw" && !showCreationModal;
         try {
             if (inDraw && drawInteraction === "place") {
