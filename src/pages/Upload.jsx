@@ -18,7 +18,7 @@ import FileUploadZone from "../components/upload/FileUploadZone";
 import ContextualForm from "../components/upload/ContextualForm";
 import MultiTestReview from "../components/upload/MultiTestReview";
 import YieldTicketReview from "../components/upload/YieldTicketReview";
-import ReviewContextEnrichment from "../components/upload/ReviewContextEnrichment";
+import UploadStep5MetadataEditor from "../components/upload/UploadStep5MetadataEditor";
 import BatchUploadModal from "../components/upload/BatchUploadModal";
 import AsyncUploadFlow from "../components/upload/AsyncUploadFlow";
 import { useUploadAndParse, normalizeSoilDataKeys } from "../components/hooks/useUploadAndParse";
@@ -40,6 +40,188 @@ function parseContextSnapshot(raw) {
         }
     }
     return null;
+}
+
+function pickFirstDefined(...values) {
+    for (const v of values) {
+        if (v !== undefined && v !== null) return v;
+    }
+    return undefined;
+}
+
+function formatFieldLocation(reg) {
+    if (!reg || typeof reg !== "object") return null;
+    const c = reg.center_point || reg.centerPoint;
+    if (c && typeof c === "object") {
+        const lat = c.latitude ?? c.lat;
+        const lon = c.longitude ?? c.lng ?? c.lon;
+        if (lat != null && lon != null && !Number.isNaN(Number(lat)) && !Number.isNaN(Number(lon))) {
+            return `${Number(lat).toFixed(4)}, ${Number(lon).toFixed(4)}`;
+        }
+    }
+    if (reg.location && typeof reg.location === "string" && reg.location.trim()) return reg.location.trim();
+    if (reg.address && typeof reg.address === "string" && reg.address.trim()) return reg.address.trim();
+    return null;
+}
+
+function buildSeasonalMemorySnapshot(snap) {
+    if (!snap || typeof snap !== "object") return {};
+    return {
+        intended_crop: snap.intended_crop ?? null,
+        farming_method: snap.farming_method ?? null,
+        previous_crop_history: snap.previous_crop_history ?? null,
+    };
+}
+
+function buildFieldMemorySnapshot(registryField, snap) {
+    const reg = registryField;
+    const seasonal = buildSeasonalMemorySnapshot(snap);
+    return {
+        field_name: reg ? (reg.field_name ?? reg.name ?? reg.fieldName ?? null) : null,
+        acres: reg ? (reg.acres ?? reg.field_size_acres ?? reg.size ?? null) : null,
+        soil_type: reg?.soil_type ?? snap?.soil_type ?? null,
+        location: formatFieldLocation(reg) ?? (snap?.address && String(snap.address).trim()) ?? null,
+        current_crop: reg?.current_crop ?? seasonal.intended_crop ?? null,
+        farming_method: reg?.farming_method ?? seasonal.farming_method ?? null,
+        previous_crop_history: reg?.previous_crop_history ?? seasonal.previous_crop_history ?? null,
+        last_soil_test_date: reg?.last_soil_test_date ?? null,
+    };
+}
+
+function firstSoilExtractionHints(shapedRows, extractedRows) {
+    const ex0 = Array.isArray(extractedRows) && extractedRows[0] ? extractedRows[0] : {};
+    const sh0 = Array.isArray(shapedRows) && shapedRows[0] ? shapedRows[0] : {};
+    const test_date = sh0.test_date ?? ex0.test_date ?? null;
+    const crop_type = sh0.crop_type ?? ex0.crop_type ?? null;
+    const lab_name = ex0.lab_info?.lab_name ?? null;
+    const zones = Array.isArray(extractedRows)
+        ? [...new Set(extractedRows.map((t) => t.zone_name).filter(Boolean))]
+        : [];
+    const entered = zones.length ? zones.join(", ") : (sh0.zone_name ?? null);
+    return { test_date, crop_type, lab_name, enteredFieldLabel: entered };
+}
+
+function firstYieldExtractionHints(tickets) {
+    const t0 = Array.isArray(tickets) && tickets[0] ? tickets[0] : {};
+    return {
+        ticket_date: t0.ticket_date ?? t0.ticketDate ?? null,
+        crop: t0.crop ?? t0.crop_type ?? null,
+    };
+}
+
+function buildInitialCriticalMetadataDraftSoil({
+    shapedRows,
+    extractedRows,
+    linkageBase,
+    sourceFileName,
+    documentNote,
+    snap,
+    registryField,
+}) {
+    const hints = firstSoilExtractionHints(shapedRows, extractedRows);
+    const memCrop = registryField?.current_crop ?? snap?.intended_crop ?? null;
+    return {
+        linkedFieldId: linkageBase.linkedFieldId ?? null,
+        linkedFieldName: linkageBase.linkedFieldName ?? null,
+        enteredFieldLabel: hints.enteredFieldLabel ?? linkageBase.enteredFieldLabel ?? "",
+        sourceFileName: sourceFileName ?? null,
+        documentNote: documentNote ?? snap?.documentNote ?? "",
+        test_date: hints.test_date ?? snap?.test_date ?? registryField?.last_soil_test_date ?? "",
+        lab_name: hints.lab_name ?? "",
+        crop_type: hints.crop_type ?? memCrop ?? "",
+        seasonalNote: snap?.seasonal_note ?? snap?.rotation_note ?? "",
+    };
+}
+
+function buildInitialCriticalMetadataDraftYield({
+    tickets,
+    linkageBase,
+    sourceFileName,
+    documentNote,
+    snap,
+    registryField,
+}) {
+    const hints = firstYieldExtractionHints(tickets);
+    const memCrop = registryField?.current_crop ?? snap?.intended_crop ?? null;
+    const ticketLabels = Array.isArray(tickets)
+        ? [...new Set(tickets.map((t) => t.field_name || t.fieldLabel).filter(Boolean))]
+        : [];
+    const enteredFromTickets = ticketLabels.length ? ticketLabels.join(", ") : "";
+    return {
+        linkedFieldId: linkageBase.linkedFieldId ?? null,
+        linkedFieldName: linkageBase.linkedFieldName ?? null,
+        enteredFieldLabel: enteredFromTickets || linkageBase.enteredFieldLabel || "",
+        sourceFileName: sourceFileName ?? null,
+        documentNote: documentNote ?? snap?.documentNote ?? "",
+        ticket_date: hints.ticket_date ?? "",
+        crop: hints.crop ?? memCrop ?? "",
+        yieldNote: snap?.yield_note ?? "",
+    };
+}
+
+function applySoilCriticalMetadataToRows(shapedRows, extractedRows, draft) {
+    if (!Array.isArray(shapedRows)) return [];
+    return shapedRows.map((row, i) => {
+        const ex = Array.isArray(extractedRows) ? extractedRows[i] : null;
+        const merged = { ...row };
+        if (draft.test_date != null && String(draft.test_date).trim()) merged.test_date = draft.test_date;
+        if (draft.crop_type != null && String(draft.crop_type).trim()) merged.crop_type = String(draft.crop_type).trim();
+        if (draft.enteredFieldLabel != null && String(draft.enteredFieldLabel).trim()) {
+            merged.zone_name = String(draft.enteredFieldLabel).trim();
+        }
+        if (draft.linkedFieldId != null && draft.linkedFieldId !== "") merged.field_id = draft.linkedFieldId;
+        const fn = pickFirstDefined(
+            draft.linkedFieldName && String(draft.linkedFieldName).trim() ? draft.linkedFieldName : undefined,
+            draft.enteredFieldLabel && String(draft.enteredFieldLabel).trim() ? draft.enteredFieldLabel : undefined,
+            row.field_name,
+        );
+        if (fn) merged.field_name = String(fn).trim();
+        const lab = (draft.lab_name && String(draft.lab_name).trim()) || ex?.lab_info?.lab_name;
+        if (lab) merged.lab_info = { ...(ex?.lab_info || row.lab_info || {}), lab_name: lab };
+        return merged;
+    });
+}
+
+function applyYieldCriticalMetadataToRows(tickets, draft) {
+    if (!Array.isArray(tickets)) return [];
+    return tickets.map((t) => {
+        const merged = { ...t };
+        if (draft.ticket_date != null && String(draft.ticket_date).trim()) {
+            merged.ticket_date = draft.ticket_date;
+            merged.ticketDate = draft.ticket_date;
+        }
+        if (draft.crop != null && String(draft.crop).trim()) merged.crop = String(draft.crop).trim();
+        if (draft.linkedFieldId != null && draft.linkedFieldId !== "") merged.field_id = draft.linkedFieldId;
+        const fn = pickFirstDefined(
+            draft.linkedFieldName && String(draft.linkedFieldName).trim() ? draft.linkedFieldName : undefined,
+            draft.enteredFieldLabel && String(draft.enteredFieldLabel).trim() ? draft.enteredFieldLabel : undefined,
+            t.field_name,
+            t.fieldLabel,
+        );
+        if (fn) {
+            merged.field_name = String(fn).trim();
+            merged.fieldLabel = merged.field_name;
+        }
+        return merged;
+    });
+}
+
+function buildLinkageFromStep5Draft(baseLinkage, draft) {
+    if (!draft) return baseLinkage;
+    const linkedName =
+        draft.linkedFieldName && String(draft.linkedFieldName).trim() ? draft.linkedFieldName : undefined;
+    const entered =
+        draft.enteredFieldLabel != null && String(draft.enteredFieldLabel).trim()
+            ? draft.enteredFieldLabel
+            : undefined;
+    return {
+        ...baseLinkage,
+        linkedFieldId: draft.linkedFieldId,
+        linkedFieldName: linkedName ?? baseLinkage.linkedFieldName,
+        enteredFieldLabel: entered ?? baseLinkage.enteredFieldLabel,
+        field_id: draft.linkedFieldId,
+        field_name: pickFirstDefined(linkedName, entered, baseLinkage.field_name),
+    };
 }
 
 export default function UploadPage() {
@@ -98,6 +280,12 @@ export default function UploadPage() {
     /** Shaped soil rows ready for save after step 4 → 5 (API payload shape). */
     const soilTestsForSaveRef = useRef(null);
 
+    /** Step 5: editable linkage + critical metadata (merged on save; lab/note ready for future API fields). */
+    const [criticalMetadataDraft, setCriticalMetadataDraft] = useState(null);
+    /** Step 3: read-only registry + snapshot hints for comparison UI. */
+    const [fieldMemorySnapshot, setFieldMemorySnapshot] = useState(() => ({}));
+    const [seasonalMemorySnapshot, setSeasonalMemorySnapshot] = useState(() => ({}));
+
     const reviewLinkedFieldId = useMemo(() => {
         if (currentRecord?.linkedFieldId) return currentRecord.linkedFieldId;
         const snap = parseContextSnapshot(currentRecord?.contextSnapshot);
@@ -126,13 +314,6 @@ export default function UploadPage() {
 
     const effectiveDocumentFamily =
         reviewFamily || documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
-
-    const pickFirstDefined = (...values) => {
-        for (const v of values) {
-            if (v !== undefined && v !== null) return v;
-        }
-        return undefined;
-    };
 
     const buildNormalizedLinkageOptions = () => {
         const ctx = contextualData || {};
@@ -607,7 +788,9 @@ export default function UploadPage() {
         setIsLoadingExtraction(false);
     };
 
-    const handleFinalizeAndAnalyze = async (finalizedTests) => {
+    const handleFinalizeAndAnalyze = async (finalizedTests, options = {}) => {
+        const { linkage: linkageOpt, yieldTicketsOverride } = options;
+        const linkage = linkageOpt ?? buildNormalizedLinkageOptions();
         const fullMode = !isAnonymousUser && isApiConfigured();
         const uploadId = backendReviewUploadId || result?.uploadId;
 
@@ -621,7 +804,6 @@ export default function UploadPage() {
             setIsSaving(true);
             setSaveError(null);
             try {
-                const linkage = buildNormalizedLinkageOptions();
                 const res = await saveNormalizedRecords(uploadId, finalizedTests, linkage);
                 const count = res?.count ?? res?.saved?.length ?? finalizedTests.length;
                 const successMessage = `Successfully saved ${count} record${count !== 1 ? "s" : ""}!`;
@@ -655,26 +837,30 @@ export default function UploadPage() {
             return;
         }
 
+        const ticketsToSave =
+            Array.isArray(yieldTicketsOverride) && yieldTicketsOverride.length > 0
+                ? yieldTicketsOverride
+                : yieldTickets;
+
         if (
             fullMode &&
             uploadId &&
             isYieldTicketDocument(reviewFamily) &&
-            Array.isArray(yieldTickets) &&
-            yieldTickets.length > 0
+            Array.isArray(ticketsToSave) &&
+            ticketsToSave.length > 0
         ) {
             setIsSaving(true);
             setSaveError(null);
             try {
-                const linkage = buildNormalizedLinkageOptions();
-                const res = await saveNormalizedRecords(uploadId, yieldTickets, {
+                const res = await saveNormalizedRecords(uploadId, ticketsToSave, {
                     ...linkage,
                     documentFamily: "yield_scale_ticket",
                 });
-                const count = res?.count ?? res?.saved?.length ?? yieldTickets.length;
+                const count = res?.count ?? res?.saved?.length ?? ticketsToSave.length;
                 const successMessage = `Successfully saved ${count} yield ticket${count !== 1 ? "s" : ""}!`;
                 const fieldIdForReturn = pickFirstDefined(
                     fieldIdFromUrl || undefined,
-                    yieldTickets[0]?.field_id,
+                    ticketsToSave[0]?.field_id,
                     linkage.linkedFieldId,
                     linkage.field_id
                 );
@@ -728,21 +914,59 @@ export default function UploadPage() {
 
     const handleContinueSoilReviewToContext = (shapedTests) => {
         soilTestsForSaveRef.current = Array.isArray(shapedTests) ? shapedTests : [];
+        const fname = currentRecord?.filename || file?.name || null;
+        const baseLink = buildNormalizedLinkageOptions();
+        setSeasonalMemorySnapshot(buildSeasonalMemorySnapshot(reviewContextSnapshot));
+        setFieldMemorySnapshot(buildFieldMemorySnapshot(registryFieldForReview, reviewContextSnapshot));
+        setCriticalMetadataDraft(
+            buildInitialCriticalMetadataDraftSoil({
+                shapedRows: soilTestsForSaveRef.current,
+                extractedRows: extractedTests,
+                linkageBase: baseLink,
+                sourceFileName: fname,
+                documentNote: reviewDocumentNote ?? "",
+                snap: reviewContextSnapshot,
+                registryField: registryFieldForReview,
+            }),
+        );
         setCurrentStep(5);
     };
 
     const handleContinueYieldReviewToContext = () => {
+        const fname = currentRecord?.filename || file?.name || null;
+        const baseLink = buildNormalizedLinkageOptions();
+        setSeasonalMemorySnapshot(buildSeasonalMemorySnapshot(reviewContextSnapshot));
+        setFieldMemorySnapshot(buildFieldMemorySnapshot(registryFieldForReview, reviewContextSnapshot));
+        setCriticalMetadataDraft(
+            buildInitialCriticalMetadataDraftYield({
+                tickets: yieldTickets,
+                linkageBase: baseLink,
+                sourceFileName: fname,
+                documentNote: reviewDocumentNote ?? "",
+                snap: reviewContextSnapshot,
+                registryField: registryFieldForReview,
+            }),
+        );
         setCurrentStep(5);
     };
 
     const handleEnrichmentStepSave = () => {
+        const d = criticalMetadataDraft;
+        if (!d) {
+            toast.error("Metadata not ready. Go back to data review and continue.");
+            return;
+        }
+        const baseLink = buildNormalizedLinkageOptions();
+        const linkage = buildLinkageFromStep5Draft(baseLink, d);
+
         if (isSoilDocument(reviewFamily)) {
             const shaped = soilTestsForSaveRef.current;
             if (!Array.isArray(shaped) || shaped.length === 0) {
                 toast.error("No reviewed soil data to save. Go back to review.");
                 return;
             }
-            void handleFinalizeAndAnalyze(shaped);
+            const merged = applySoilCriticalMetadataToRows(shaped, extractedTests, d);
+            void handleFinalizeAndAnalyze(merged, { linkage });
             return;
         }
         if (isYieldTicketDocument(reviewFamily)) {
@@ -750,12 +974,16 @@ export default function UploadPage() {
                 toast.error("No yield tickets to save.");
                 return;
             }
-            void handleFinalizeAndAnalyze(yieldTickets);
+            const merged = applyYieldCriticalMetadataToRows(yieldTickets, d);
+            void handleFinalizeAndAnalyze(merged, { linkage, yieldTicketsOverride: merged });
         }
     };
 
     const resetUpload = () => {
         soilTestsForSaveRef.current = null;
+        setCriticalMetadataDraft(null);
+        setFieldMemorySnapshot({});
+        setSeasonalMemorySnapshot({});
         setFile(null);
         setContextualData(null);
         setError(null);
@@ -1183,41 +1411,25 @@ export default function UploadPage() {
                     </>
                 )}
 
-                {currentStep === 5 && (
+                {currentStep === 5 && criticalMetadataDraft && (
                     <>
                         {saveError && (
                             <Alert variant="destructive" className="mb-4">
                                 <AlertDescription>{saveError}</AlertDescription>
                             </Alert>
                         )}
-                        <ReviewContextEnrichment
-                            registryField={registryFieldForReview}
-                            contextSnapshot={reviewContextSnapshot}
-                            documentNote={reviewDocumentNote}
-                            linkedFieldName={(() => {
-                                const rec = currentRecord;
-                                if (!rec) return contextualData?.linkedFieldName ?? null;
-                                const rawCtx = rec.contextSnapshot;
-                                let ctx = null;
-                                if (rawCtx) {
-                                    try {
-                                        ctx = typeof rawCtx === "string" ? JSON.parse(rawCtx) : rawCtx;
-                                    } catch {
-                                        ctx = null;
-                                    }
-                                }
-                                return rec.linkedFieldName ?? ctx?.linkedFieldName ?? contextualData?.linkedFieldName ?? null;
-                            })()}
+                        <UploadStep5MetadataEditor
+                            mode={isSoilDocument(reviewFamily) ? "soil" : "yield"}
+                            criticalMetadataDraft={criticalMetadataDraft}
+                            onDraftChange={(patch) =>
+                                setCriticalMetadataDraft((prev) => (prev ? { ...prev, ...patch } : prev))
+                            }
+                            fieldMemorySnapshot={fieldMemorySnapshot}
+                            seasonalMemorySnapshot={seasonalMemorySnapshot}
+                            canonicalFields={canonicalFields}
                         />
                         <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
-                            <CardContent className="space-y-2 py-6">
-                                <h3 className="text-lg font-semibold text-green-900">Save to your account</h3>
-                                <p className="text-sm text-green-800">
-                                    Context above is prefilled from field memory and this upload when available. You can skip
-                                    reading it and save — or go back to adjust extracted values.
-                                </p>
-                            </CardContent>
-                            <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 sm:flex-row sm:justify-end">
+                            <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:justify-end">
                                 <Button variant="outline" onClick={() => setCurrentStep(4)} className="border-slate-300">
                                     Back to data review
                                 </Button>

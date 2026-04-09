@@ -1,7 +1,9 @@
 /**
  * Derive display strings for the signed-in user card from GET /me response.
- * Priority: email → username (if not UUID/sub) → name (full_name/name) → shortened sub as last resort.
- * Never show raw Cognito sub as the primary label; only shortened sub when nothing else is available.
+ * Primary label priority: full_name → name → email (full) → username when it looks like an email (full) →
+ * human username (non-UUID, not sub) → shortened sub. (A dedicated “email local-part” slot is redundant once a full
+ * mailbox string is chosen; if you later need short-only labels, branch here.)
+ * Never prefer a UUID/sub-style username over email.
  */
 
 function looksLikeUUID(s) {
@@ -14,6 +16,12 @@ function truncateSub(sub) {
   return sub.length > 8 ? sub.slice(0, 8) + '…' : sub;
 }
 
+function trimStr(v) {
+  if (v == null || typeof v !== 'string') return null;
+  const t = v.trim();
+  return t || null;
+}
+
 /**
  * @param {object} user - User object from GET /me (ok, sub, username, email, authProvider).
  * @returns {{ primary: string, secondary: string, initial: string }}
@@ -23,14 +31,27 @@ export function getUserDisplayIdentity(user) {
     return { primary: 'User', secondary: 'Signed in', initial: 'U' };
   }
 
-  const email = (user.email && typeof user.email === 'string') ? user.email.trim() : null;
-  const rawUsername = (user.username && typeof user.username === 'string') ? user.username.trim() : null;
-  const username = rawUsername && !looksLikeUUID(rawUsername) && rawUsername !== user.sub ? rawUsername : null;
-  const name = (user.full_name || user.name) && typeof (user.full_name || user.name) === 'string'
-    ? (user.full_name || user.name).trim() : null;
-  const subDisplay = user.sub ? truncateSub(user.sub) : null;
+  const fullName = trimStr(user.full_name);
+  const name = trimStr(user.name);
+  const email = trimStr(user.email);
+  const rawUsername = trimStr(user.username);
+  const sub = trimStr(user.sub);
 
-  const primary = email || username || name || subDisplay || 'User';
+  const usernameAsEmail = rawUsername && rawUsername.includes('@') ? rawUsername : null;
+  const humanUsername =
+    rawUsername && rawUsername !== sub && !looksLikeUUID(rawUsername) && !usernameAsEmail
+      ? rawUsername
+      : null;
+
+  const primary =
+    fullName ||
+    name ||
+    email ||
+    usernameAsEmail ||
+    humanUsername ||
+    (sub ? truncateSub(sub) : null) ||
+    'User';
+
   const secondary = 'Signed in';
   const initial = (primary && primary !== 'User' ? primary.charAt(0) : 'U').toUpperCase();
 
