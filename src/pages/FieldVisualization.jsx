@@ -609,32 +609,45 @@ function FieldVisualizationContent() {
         const canvas = map.getCanvas?.();
 
         if (placeVertices) {
-            try {
-                map.dragPan.disable();
-            } catch {
-                /* ignore */
-            }
-            try {
-                map.doubleClickZoom.disable();
-            } catch {
-                /* ignore */
-            }
+            const disableNav = () => {
+                try {
+                    map.dragPan.disable();
+                } catch {
+                    /* ignore */
+                }
+                try {
+                    map.doubleClickZoom.disable();
+                } catch {
+                    /* ignore */
+                }
+            };
+
+            // Some browsers/devices only apply handler toggles after a frame.
+            disableNav();
+            requestAnimationFrame(() => disableNav());
+
             if (canvas) {
                 canvas.style.touchAction = "none";
                 canvas.style.userSelect = "none";
                 canvas.style.cursor = "crosshair";
             }
         } else {
-            try {
-                map.dragPan.enable();
-            } catch {
-                /* ignore */
-            }
-            try {
-                map.doubleClickZoom.enable();
-            } catch {
-                /* ignore */
-            }
+            const enableNav = () => {
+                try {
+                    map.dragPan.enable();
+                } catch {
+                    /* ignore */
+                }
+                try {
+                    map.doubleClickZoom.enable();
+                } catch {
+                    /* ignore */
+                }
+            };
+
+            enableNav();
+            requestAnimationFrame(() => enableNav());
+
             if (canvas) {
                 canvas.style.touchAction = "";
                 canvas.style.userSelect = "";
