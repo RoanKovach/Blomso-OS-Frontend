@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,20 @@ import { useTracking } from '@/components/analytics/useTracking';
 import { saveNormalizedRecords, getRecord } from "@/api/records";
 import { getExtraction } from "@/api/extraction";
 import { DOCUMENT_FAMILY_SOIL_TEST, DOCUMENT_FAMILY_YIELD_TICKET, getUploadCopy, getStepLabels, isSoilDocument, isYieldTicketDocument } from "@/lib/documentFamilies";
+
+function parseContextSnapshot(raw) {
+    if (raw == null) return null;
+    if (typeof raw === "object" && !Array.isArray(raw)) return raw;
+    if (typeof raw === "string") {
+        try {
+            const o = JSON.parse(raw);
+            return typeof o === "object" && o !== null ? o : null;
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
 
 export default function UploadPage() {
     const navigate = useNavigate();
@@ -80,6 +94,32 @@ export default function UploadPage() {
     const [reviewFamily, setReviewFamily] = useState(DOCUMENT_FAMILY_SOIL_TEST);
     /** Structured yield tickets for review when reviewFamily is yield. */
     const [yieldTickets, setYieldTickets] = useState([]);
+
+    const reviewLinkedFieldId = useMemo(() => {
+        if (currentRecord?.linkedFieldId) return currentRecord.linkedFieldId;
+        const snap = parseContextSnapshot(currentRecord?.contextSnapshot);
+        if (snap?.linkedFieldId) return snap.linkedFieldId;
+        if (contextualData?.linkedFieldId) return contextualData.linkedFieldId;
+        return fieldIdFromUrl || null;
+    }, [currentRecord, contextualData, fieldIdFromUrl]);
+
+    const registryFieldForReview = useMemo(() => {
+        if (!reviewLinkedFieldId || !canonicalFields.length) return null;
+        return canonicalFields.find((f) => f.id === reviewLinkedFieldId) ?? null;
+    }, [reviewLinkedFieldId, canonicalFields]);
+
+    const reviewContextSnapshot = useMemo(() => {
+        const fromRecord = parseContextSnapshot(currentRecord?.contextSnapshot);
+        if (fromRecord && Object.keys(fromRecord).length > 0) return fromRecord;
+        if (contextualData && typeof contextualData === "object") return contextualData;
+        return null;
+    }, [currentRecord, contextualData]);
+
+    const reviewDocumentNote = useMemo(() => {
+        const n = reviewContextSnapshot?.documentNote;
+        if (n != null && String(n).trim() !== "") return String(n).trim();
+        return null;
+    }, [reviewContextSnapshot]);
 
     const effectiveDocumentFamily =
         reviewFamily || documentFamily || DOCUMENT_FAMILY_SOIL_TEST;
@@ -1053,6 +1093,9 @@ export default function UploadPage() {
                                             ? [...new Set(yieldTickets.map((t) => t.field_name || t.fieldName).filter(Boolean))].join(", ")
                                             : null
                                     }
+                                    registryField={registryFieldForReview}
+                                    contextSnapshot={reviewContextSnapshot}
+                                    documentNote={reviewDocumentNote}
                                 />
                             </>
                         ) : (isSoilDocument(reviewFamily) && extractedTests.length > 0) ? (
@@ -1084,6 +1127,9 @@ export default function UploadPage() {
                                     extractedZoneFieldSummary={extractedTests.length
                                         ? [...new Set(extractedTests.map((t) => t.zone_name).filter(Boolean))].join(', ')
                                         : null}
+                                    registryField={registryFieldForReview}
+                                    contextSnapshot={reviewContextSnapshot}
+                                    documentNote={reviewDocumentNote}
                                 />
                             </>
                         ) : (

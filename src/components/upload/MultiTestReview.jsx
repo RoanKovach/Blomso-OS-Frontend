@@ -11,6 +11,7 @@ import { toast } from "react-hot-toast"; // Assuming react-hot-toast for toasts
 
 // Import validation utilities
 import { validateSoilTest, shapeSoilTestPayload, parse422Errors } from "../utils/soilTestValidation";
+import ReviewContextEnrichment from "./ReviewContextEnrichment";
 
 // Helper component for editable fields with validation
 const EditableField = ({ id, label, value, onChange, error, isBlank, type = "number", placeholder, required = false }) => (
@@ -30,7 +31,20 @@ const EditableField = ({ id, label, value, onChange, error, isBlank, type = "num
     </div>
 );
 
-export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFinalize, onCancel, apiErrors = {}, isSaving = false, linkedFieldName = null, extractedZoneFieldSummary = null }) {
+export default function MultiTestReview({
+    tests,
+    onUpdateTest,
+    onResetTest,
+    onFinalize,
+    onCancel,
+    apiErrors = {},
+    isSaving = false,
+    linkedFieldName = null,
+    extractedZoneFieldSummary = null,
+    registryField = null,
+    contextSnapshot = null,
+    documentNote = null,
+}) {
     const [validationErrors, setValidationErrors] = useState({});
     
     // All soil data fields that should be displayed
@@ -130,16 +144,22 @@ export default function MultiTestReview({ tests, onUpdateTest, onResetTest, onFi
 
     return (
         <div className="space-y-6">
+            <ReviewContextEnrichment
+                registryField={registryField}
+                contextSnapshot={contextSnapshot}
+                documentNote={documentNote}
+                linkedFieldName={linkedFieldName}
+            />
             <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div>
                             <CardTitle className="text-2xl font-bold text-green-900 mb-2 flex items-center gap-3">
                                 <FileText className="w-7 h-7" />
-                                Review Extracted Data
+                                Review &amp; enrich — soil test evidence
                             </CardTitle>
                             <p className="text-green-700">
-                                The AI found {tests.length} record{tests.length !== 1 ? 's' : ''}. Review and edit all fields below before saving.
+                                Confirm extracted values below. Use the context section above to see field memory; seasonal and profile updates will be wired to save in a later phase.
                             </p>
                             {(linkedFieldName || extractedZoneFieldSummary) && (
                                 <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-900 space-y-1">
