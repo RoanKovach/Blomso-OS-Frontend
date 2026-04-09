@@ -433,7 +433,7 @@ function FieldVisualizationContent() {
         drawingPoints.forEach((pt) => {
             const el = document.createElement("div");
             el.style.cssText =
-                "background-color:#3b82f6;border:2px solid white;border-radius:50%;width:12px;height:12px;";
+                "background-color:#3b82f6;border:2px solid white;border-radius:50%;width:12px;height:12px;pointer-events:none;cursor:crosshair;";
             const marker = new maplibregl.Marker({ element: el })
                 .setLngLat([pt.lng, pt.lat])
                 .addTo(map);
@@ -502,11 +502,14 @@ function FieldVisualizationContent() {
         (event) => {
             if (mode === "draw" && !showCreationModal) {
                 const { lng, lat } = event.lngLat;
-                setDrawingPoints((prev) => [...prev, { lng, lat }]);
-                trackUserAction("drawing_point_added", { point_count: drawingPoints.length + 1 });
+                setDrawingPoints((prev) => {
+                    const next = [...prev, { lng, lat }];
+                    trackUserAction("drawing_point_added", { point_count: next.length });
+                    return next;
+                });
             }
         },
-        [mode, showCreationModal, drawingPoints.length, trackUserAction]
+        [mode, showCreationModal, trackUserAction]
     );
 
     useEffect(() => {
