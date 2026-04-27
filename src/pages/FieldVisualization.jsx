@@ -40,6 +40,9 @@ const PARCELS_LAYER = "parcels-layer";
 /** Max zoom for the Fields map: avoids satellite tiles that return "Map data not yet available." */
 const MAP_MAX_ZOOM_CAP = 18;
 
+/** Min map zoom: regional / multi-state; avoids world-scale zoom-out. */
+const MAP_MIN_ZOOM = 5;
+
 /**
  * Satellite raster `source.maxzoom` is one below the map cap (unless API is lower) so at max map zoom
  * MapLibre overzooms the last available tiles instead of requesting a flaky top z-level.
@@ -228,6 +231,7 @@ function FieldVisualizationContent() {
             style: styleUrl,
             center: [lon, lat],
             zoom: initialZoom,
+            minZoom: MAP_MIN_ZOOM,
             maxZoom: effectiveMapMaxZoom,
             fadeDuration: 0,
             refreshExpiredTiles: false,
@@ -386,7 +390,10 @@ function FieldVisualizationContent() {
             setMapZoom(map.getZoom());
         });
 
-        const onZoomEnd = () => setMapZoom(map.getZoom());
+        const onZoomEnd = () => {
+            console.log("Fields map zoom:", map.getZoom());
+            setMapZoom(map.getZoom());
+        };
         map.on("zoomend", onZoomEnd);
 
         return () => {
