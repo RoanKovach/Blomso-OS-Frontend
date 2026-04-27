@@ -40,7 +40,10 @@ const PARCELS_LAYER = "parcels-layer";
 /** Max zoom for the Fields map: avoids satellite tiles that return "Map data not yet available." */
 const MAP_MAX_ZOOM_CAP = 18;
 
-/** One below map cap: raster source uses this so MapLibre overzooms at the top map zoom. */
+/**
+ * Satellite raster `source.maxzoom` is one below the map cap (unless API is lower) so at max map zoom
+ * MapLibre overzooms the last available tiles instead of requesting a flaky top z-level.
+ */
 const SATELLITE_SOURCE_MAXZOOM_DEFAULT = MAP_MAX_ZOOM_CAP - 1;
 
 /** User-toggleable overlay defaults. Satellite is always the base map (not toggled here). */
@@ -167,9 +170,10 @@ function FieldVisualizationContent() {
         return MAP_MAX_ZOOM_CAP;
     }, [mapConfig]);
 
-    /** Raster tile max zoom: min(api maxzoom, cap−1) so at map maxZoom the source overzooms instead of empty tiles. */
+    /** Raster tile max z for satellite: min(API, cap−1) so map can zoom one step higher via overzoom. */
     const satelliteSourceMaxZoom = useMemo(() => {
-        const m = mapConfig?.layers?.satellite?.maxzoom;
+        if (!mapConfig?.layers?.satellite) return SATELLITE_SOURCE_MAXZOOM_DEFAULT;
+        const m = mapConfig.layers.satellite.maxzoom;
         if (m != null && Number.isFinite(Number(m))) {
             return Math.min(Number(m), SATELLITE_SOURCE_MAXZOOM_DEFAULT);
         }
@@ -243,7 +247,9 @@ function FieldVisualizationContent() {
             const defs = PRODUCT_LAYER_DEFAULTS;
 
             /** Satellite is the fixed base imagery layer (not exposed as an optional overlay toggle). */
-            const addRaster = (sourceId, spec, layerId, defaultVisible, opacity, { omitLayerMaxZoom = false } = {}) => {
+            /** omitLayerMaxZoom: do not set layer maxzoom so raster stays visible when map zoom > source maxzoom (overzoom). */
+            const addRaster = (sourceId, spec, layerId, defaultVisible, opacity, opts = {}) => {
+                const { omitLayerMaxZoom = false } = opts;
                 if (!spec?.tiles?.length) return;
                 const tileSize = spec.tileSize ?? 256;
                 map.addSource(sourceId, {
