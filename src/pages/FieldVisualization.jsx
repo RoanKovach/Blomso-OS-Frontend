@@ -40,6 +40,9 @@ const PARCELS_LAYER = "parcels-layer";
 /** Max zoom for the Fields map: avoids satellite tiles that return "Map data not yet available." */
 const MAP_MAX_ZOOM_CAP = 18;
 
+/** One below map cap: raster source uses this so MapLibre overzooms at the top map zoom. */
+const SATELLITE_SOURCE_MAXZOOM_DEFAULT = MAP_MAX_ZOOM_CAP - 1;
+
 /** User-toggleable overlay defaults. Satellite is always the base map (not toggled here). */
 const PRODUCT_LAYER_DEFAULTS = {
     parcels: false,
@@ -164,6 +167,15 @@ function FieldVisualizationContent() {
         return MAP_MAX_ZOOM_CAP;
     }, [mapConfig]);
 
+    /** Raster tile max zoom: min(api maxzoom, cap−1) so at map maxZoom the source overzooms instead of empty tiles. */
+    const satelliteSourceMaxZoom = useMemo(() => {
+        const m = mapConfig?.layers?.satellite?.maxzoom;
+        if (m != null && Number.isFinite(Number(m))) {
+            return Math.min(Number(m), SATELLITE_SOURCE_MAXZOOM_DEFAULT);
+        }
+        return SATELLITE_SOURCE_MAXZOOM_DEFAULT;
+    }, [mapConfig]);
+
     useEffect(() => {
         if (!location.state?.refreshFieldStory) return;
         setStoryRefreshNonce((n) => n + 1);
@@ -213,6 +225,8 @@ function FieldVisualizationContent() {
             center: [lon, lat],
             zoom: initialZoom,
             maxZoom: effectiveMapMaxZoom,
+            fadeDuration: 0,
+            refreshExpiredTiles: false,
         });
 
         mapRef.current = map;
@@ -229,7 +243,7 @@ function FieldVisualizationContent() {
             const defs = PRODUCT_LAYER_DEFAULTS;
 
             /** Satellite is the fixed base imagery layer (not exposed as an optional overlay toggle). */
-            const addRaster = (sourceId, spec, layerId, defaultVisible, opacity) => {
+            const addRaster = (sourceId, spec, layerId, defaultVisible, opacity, { omitLayerMaxZoom = false } = {}) => {
                 if (!spec?.tiles?.length) return;
                 const tileSize = spec.tileSize ?? 256;
                 map.addSource(sourceId, {
@@ -254,7 +268,7 @@ function FieldVisualizationContent() {
                     paint,
                 };
                 if (spec.minzoom != null) layerDef.minzoom = spec.minzoom;
-                if (spec.maxzoom != null) layerDef.maxzoom = spec.maxzoom;
+                if (!omitLayerMaxZoom && spec.maxzoom != null) layerDef.maxzoom = spec.maxzoom;
                 map.addLayer(layerDef);
             };
 
@@ -262,12 +276,9 @@ function FieldVisualizationContent() {
                 const sat = L.satellite;
                 const satForAdd = {
                     ...sat,
-                    maxzoom:
-                        sat.maxzoom != null
-                            ? Math.min(Number(sat.maxzoom), effectiveMapMaxZoom)
-                            : effectiveMapMaxZoom,
+                    maxzoom: satelliteSourceMaxZoom,
                 };
-                addRaster("satellite-src", satForAdd, SAT_LAYER, true, null);
+                addRaster("satellite-src", satForAdd, SAT_LAYER, true, null, { omitLayerMaxZoom: true });
             }
 
             const satTiles = L.satellite?.tiles;
@@ -383,7 +394,7 @@ function FieldVisualizationContent() {
                 mapRef.current = null;
             }
         };
-    }, [mapConfig, toast, effectiveMapMaxZoom]);
+    }, [mapConfig, toast, effectiveMapMaxZoom, satelliteSourceMaxZoom]);
 
     const buildFieldsGeoJSON = useCallback(() => {
         const features = fieldsList
@@ -890,7 +901,7 @@ function FieldVisualizationContent() {
 
                 <div
                     ref={mapContainerRef}
-                    className="z-0 min-h-0 w-full flex-1 bg-slate-950 md:min-h-[min(50vh,420px)]"
+                    className="z-0 min-h-0 w-full flex-1 bg-neutral-100 md:min-h-[min(50vh,420px)]"
                     style={{ width: "100%", minHeight: "min(100vh, 100%)" }}
                 />
 
