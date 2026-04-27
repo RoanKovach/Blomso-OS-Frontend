@@ -246,8 +246,7 @@ function FieldVisualizationContent() {
 
             const defs = PRODUCT_LAYER_DEFAULTS;
 
-            /** Satellite is the fixed base imagery layer (not exposed as an optional overlay toggle). */
-            /** omitLayerMaxZoom: do not set layer maxzoom so raster stays visible when map zoom > source maxzoom (overzoom). */
+            /** Satellite is the fixed base imagery layer. omitLayerMaxZoom: keep raster layer visible when map > source maxzoom (overzoom). */
             const addRaster = (sourceId, spec, layerId, defaultVisible, opacity, opts = {}) => {
                 const { omitLayerMaxZoom = false } = opts;
                 if (!spec?.tiles?.length) return;
