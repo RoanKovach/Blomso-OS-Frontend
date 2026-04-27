@@ -37,6 +37,9 @@ const SAT_LAYER = "satellite-layer";
 const NDVI_LAYER = "ndvi-layer";
 const PARCELS_LAYER = "parcels-layer";
 
+/** Max zoom for the Fields map: avoids satellite tiles that return "Map data not yet available." */
+const MAP_MAX_ZOOM_CAP = 19;
+
 /** User-toggleable overlay defaults. Satellite is always the base map (not toggled here). */
 const PRODUCT_LAYER_DEFAULTS = {
     parcels: false,
@@ -152,6 +155,15 @@ function FieldVisualizationContent() {
     const storyRefetchSignal = `${evidenceRefreshKey}:${storyRefreshNonce}`;
     const fieldStory = useFieldStory(selectedField?.id, storyRefetchSignal);
 
+    const effectiveMapMaxZoom = useMemo(() => {
+        if (!mapConfig?.layers?.satellite) return MAP_MAX_ZOOM_CAP;
+        const m = mapConfig.layers.satellite.maxzoom;
+        if (m != null && Number.isFinite(Number(m))) {
+            return Math.min(MAP_MAX_ZOOM_CAP, Number(m));
+        }
+        return MAP_MAX_ZOOM_CAP;
+    }, [mapConfig]);
+
     useEffect(() => {
         if (!location.state?.refreshFieldStory) return;
         setStoryRefreshNonce((n) => n + 1);
@@ -186,6 +198,7 @@ function FieldVisualizationContent() {
             (Array.isArray(center) ? center[0] : 40);
         const lon = view.defaultCenter?.lon ?? view.defaultCenter?.lng ?? (Array.isArray(center) ? center[1] : -82.5);
         const z = view.defaultZoom ?? zoom;
+        const initialZoom = Math.min(z, effectiveMapMaxZoom);
 
         const styleUrl = mapConfig.layers?.basemap?.styleUrl;
         if (!styleUrl) {
@@ -198,7 +211,8 @@ function FieldVisualizationContent() {
             container: mapContainerRef.current,
             style: styleUrl,
             center: [lon, lat],
-            zoom: z,
+            zoom: initialZoom,
+            maxZoom: effectiveMapMaxZoom,
         });
 
         mapRef.current = map;
@@ -244,7 +258,17 @@ function FieldVisualizationContent() {
                 map.addLayer(layerDef);
             };
 
-            addRaster("satellite-src", L.satellite, SAT_LAYER, true, null);
+            if (L.satellite?.tiles?.length) {
+                const sat = L.satellite;
+                const satForAdd = {
+                    ...sat,
+                    maxzoom:
+                        sat.maxzoom != null
+                            ? Math.min(Number(sat.maxzoom), effectiveMapMaxZoom)
+                            : effectiveMapMaxZoom,
+                };
+                addRaster("satellite-src", satForAdd, SAT_LAYER, true, null);
+            }
 
             const satTiles = L.satellite?.tiles;
             const ndviTiles = L.ndvi?.tiles;
@@ -359,7 +383,7 @@ function FieldVisualizationContent() {
                 mapRef.current = null;
             }
         };
-    }, [mapConfig, toast]);
+    }, [mapConfig, toast, effectiveMapMaxZoom]);
 
     const buildFieldsGeoJSON = useCallback(() => {
         const features = fieldsList
@@ -418,11 +442,11 @@ function FieldVisualizationContent() {
 
         map.fitBounds(b, {
             padding,
-            maxZoom: 16,
+            maxZoom: Math.min(16, effectiveMapMaxZoom),
             duration: 450,
         });
         setMapZoom(map.getZoom());
-    }, [mapReady, selectedField?.id, mergedGeometryKey, mode, fieldSelectionSeq]);
+    }, [mapReady, selectedField?.id, mergedGeometryKey, mode, fieldSelectionSeq, effectiveMapMaxZoom]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -557,7 +581,7 @@ function FieldVisualizationContent() {
                     }
                     mapRef.current.fitBounds(b, {
                         padding,
-                        maxZoom: 14,
+                        maxZoom: Math.min(14, effectiveMapMaxZoom),
                         duration: 600,
                     });
                     setMapZoom(mapRef.current.getZoom());
@@ -568,13 +592,14 @@ function FieldVisualizationContent() {
             if (withCenter && center[0] === 40.0) {
                 const la = withCenter.center_point.latitude;
                 const lo = withCenter.center_point.longitude;
+                const z = Math.min(12, effectiveMapMaxZoom);
                 setCenter([la, lo]);
-                setZoom(12);
-                mapRef.current.flyTo({ center: [lo, la], zoom: 12 });
-                setMapZoom(12);
+                setZoom(z);
+                mapRef.current.flyTo({ center: [lo, la], zoom: z });
+                setMapZoom(z);
             }
         }
-    }, [fieldsList, isLoading, selectedField, center, mapReady]);
+    }, [fieldsList, isLoading, selectedField, center, mapReady, effectiveMapMaxZoom]);
 
     useEffect(() => {
         const map = mapRef.current;
