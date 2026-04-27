@@ -38,7 +38,7 @@ const NDVI_LAYER = "ndvi-layer";
 const PARCELS_LAYER = "parcels-layer";
 
 /** Max zoom for the Fields map: avoids satellite tiles that return "Map data not yet available." */
-const MAP_MAX_ZOOM_CAP = 19;
+const MAP_MAX_ZOOM_CAP = 18;
 
 /** User-toggleable overlay defaults. Satellite is always the base map (not toggled here). */
 const PRODUCT_LAYER_DEFAULTS = {
